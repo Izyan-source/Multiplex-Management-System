@@ -221,3 +221,97 @@ def delete_customer(customer_id):
         except Error:
             connection.rollback()
             raise
+
+
+def get_shows(search=""):
+    """LEFT JOIN keeps older shows visible even if a nullable reference is empty."""
+    pattern = "%" + search.replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%"
+    with get_connection() as connection:
+        with connection.cursor(dictionary=True) as cursor:
+            cursor.execute("""
+                SELECT s.Show_ID, m.Movie_Name, sc.Screen_Name,
+                       s.Show_Date, CAST(s.Show_Time AS CHAR) AS Show_Time, s.Ticket_Price
+                FROM `Show` AS s
+                LEFT JOIN Movie AS m ON s.Movie_ID = m.Movie_ID
+                LEFT JOIN Screen AS sc ON s.Screen_ID = sc.Screen_ID
+                WHERE %s = '' OR m.Movie_Name LIKE %s ESCAPE '!'
+                ORDER BY s.Show_Date DESC, s.Show_Time, s.Show_ID
+            """, (search, pattern))
+            return cursor.fetchall()
+
+
+def get_show(show_id):
+    with get_connection() as connection:
+        with connection.cursor(dictionary=True) as cursor:
+            cursor.execute("""
+                SELECT s.Show_ID, s.Movie_ID, s.Screen_ID, m.Movie_Name, sc.Screen_Name,
+                       s.Show_Date, CAST(s.Show_Time AS CHAR) AS Show_Time, s.Ticket_Price
+                FROM `Show` AS s
+                LEFT JOIN Movie AS m ON s.Movie_ID = m.Movie_ID
+                LEFT JOIN Screen AS sc ON s.Screen_ID = sc.Screen_ID
+                WHERE s.Show_ID = %s
+            """, (show_id,))
+            return cursor.fetchone()
+
+
+def get_screens():
+    """Multiplex name and screen ID distinguish screens with the same name."""
+    with get_connection() as connection:
+        with connection.cursor(dictionary=True) as cursor:
+            cursor.execute("""
+                SELECT s.Screen_ID, s.Screen_Name, m.Multiplex_Name
+                FROM Screen AS s
+                LEFT JOIN Multiplex AS m ON s.Multiplex_ID = m.Multiplex_ID
+                ORDER BY m.Multiplex_Name, s.Screen_Name, s.Screen_ID
+            """)
+            return cursor.fetchall()
+
+
+def add_show(show):
+    with get_connection() as connection:
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute("""
+                    INSERT INTO `Show`
+                        (Show_ID, Movie_ID, Screen_ID, Show_Date, Show_Time, Ticket_Price)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                """, (show["Show_ID"], show["Movie_ID"], show["Screen_ID"],
+                      show["Show_Date"], show["Show_Time"], show["Ticket_Price"]))
+            connection.commit()
+        except Error:
+            connection.rollback()
+            raise
+
+
+def update_show(show_id, show):
+    """Return False for a removed show; unchanged submissions are successful."""
+    with get_connection() as connection:
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute("""
+                    UPDATE `Show` SET Movie_ID = %s, Screen_ID = %s, Show_Date = %s,
+                        Show_Time = %s, Ticket_Price = %s
+                    WHERE Show_ID = %s
+                """, (show["Movie_ID"], show["Screen_ID"], show["Show_Date"],
+                      show["Show_Time"], show["Ticket_Price"], show_id))
+                cursor.execute("SELECT Show_ID FROM `Show` WHERE Show_ID = %s", (show_id,))
+                exists = cursor.fetchone() is not None
+            connection.commit()
+            return exists
+        except Error:
+            connection.rollback()
+            raise
+
+
+def delete_show(show_id):
+    """An existing Booking foreign key blocks deletion in MySQL."""
+    with get_connection() as connection:
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute("DELETE FROM `Show` WHERE Show_ID = %s", (show_id,))
+                deleted = cursor.rowcount > 0
+            connection.commit()
+            return deleted
+        except Error:
+            connection.rollback()
+            raise

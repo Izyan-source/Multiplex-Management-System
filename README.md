@@ -1,16 +1,16 @@
 # Multiplex Management System
 
 A simple Flask interface for the existing MySQL `MultiplexDB` database.
-The application contains the dashboard, four live record counts, Movies and
-Customers management, and a read-only connection check. Other navigation sections remain
+The application contains the dashboard, four live record counts, Movies,
+Customers and Shows management, and a read-only connection check. Other navigation sections remain
 disabled until their pages are built.
 
 ## Files
 
-- `app.py`: dashboard, Movies and Customers routes, input validation, and `check-db` command.
-- `db.py`: environment configuration, connection, counts, and movie/customer queries.
-- `templates/`: shared layout, dashboard, and movie/customer list/add/edit/delete pages.
-- `tests/test_movies.py` and `tests/test_customers.py`: automated checks that do not connect to MySQL.
+- `app.py`: dashboard, Movies, Customers and Shows routes, validation, and `check-db` command.
+- `db.py`: environment configuration, connection, counts, and movie/customer/show queries.
+- `templates/`: shared layout, dashboard, and movie/customer/show list/add/edit/delete pages.
+- `tests/test_movies.py`, `tests/test_customers.py`, `tests/test_shows.py`: automated checks that do not connect to MySQL.
 - `static/`: custom CSS and local Bootstrap 5.3.8 CSS.
 - `.env.example`: connection settings template.
 - `dbms.sql`: original project file, unchanged and never executed by the app.
@@ -41,7 +41,7 @@ The `.env` file is excluded from Git. Exported environment variables take
 priority over `.env` values. Restart Flask after changing connection settings.
 
 The application connects to an existing database only. It does not create,
-import, reset, seed, or change the schema. Movie and customer records change only when you
+import, reset, seed, or change the schema. Movie, customer and show records change only when you
 submit an add, edit, or delete form. Do not rerun `dbms.sql` during setup.
 
 ## Test the database connection
@@ -91,7 +91,7 @@ Open http://127.0.0.1:5000/movies or choose Movies in the sidebar.
   explains why. No show or booking is deleted automatically.
 - Database failures and duplicate IDs display messages without exposing credentials.
 
-Movie and customer forms include a session token to prevent unwanted cross-site submissions.
+Movie, customer and show forms include a session token to prevent unwanted cross-site submissions.
 The app generates a secret key for each run. An optional `SECRET_KEY` environment
 variable can keep sessions stable across restarts. If a form expires after a
 restart, reload it before submitting again.
@@ -133,6 +133,35 @@ invalid input, deletion, and a real booking foreign-key rejection through the
 Flask route. The temporary customer was removed and the temporary booking was
 rolled back; original customer, movie, and booking records were unchanged.
 
+## Shows management
+
+Open http://127.0.0.1:5000/shows or choose Shows in the sidebar.
+
+- View Show ID, movie name, screen name, date, time, and ticket price.
+  SQL `LEFT JOIN`s connect `Show` to `Movie` and `Screen`, keeping older rows
+  visible even when a nullable relationship is empty. Search by movie name.
+- Schedule Show opens a form with movies and screens read from MySQL. Screen
+  options include the multiplex name and screen ID to distinguish repeated names.
+  No movies or screens are generated or hardcoded.
+- Show IDs must be unique, 1–10 letters/numbers/hyphens/underscores, and remain
+  unchanged during editing. Movie and screen selections are validated on every
+  submission; MySQL foreign keys also protect against references removed concurrently.
+- Dates must be valid calendar dates in MySQL's 1000–9999 year range. Historical
+  dates remain allowed so existing sample shows can be edited. Times must be
+  between 00:00:00 and 23:59:59; seconds are preserved when editing.
+- Ticket price must be 0.01–999999.99 with up to two decimal places, matching
+  the existing `DECIMAL(8,2)` column. Python uses `Decimal` for submitted prices.
+- Delete requires confirmation. Any existing booking, including a cancelled
+  booking, prevents deletion and produces an explanatory message.
+- This increment provides basic CRUD and input validation. It does not add
+  screen-overlap detection or a booking management workflow.
+
+All 44 automated tests passed: 18 Shows tests plus the existing 26 Movie and
+Customer tests. Live MySQL checks covered listing, joined names, search, add,
+edit, duplicate IDs, invalid references/prices/dates/times, unreferenced deletion,
+and booking-blocked deletion through the Flask route. The temporary show was
+deleted and a temporary booking was rolled back. Original records were unchanged.
+
 ## Connection troubleshooting
 
 - **Missing DB_USER:** create `.env` from `.env.example` and fill in your login.
@@ -150,8 +179,8 @@ runs one `SELECT` containing four `COUNT(*)` subqueries, returns a dictionary,
 and closes the cursor and connection. Jinja renders the results into HTML.
 Bootstrap is stored locally, so styling works without internet access.
 
-The dashboard query is fixed SQL with no input values. Movie/customer form and search
+The dashboard query is fixed SQL with no input values. Movie/customer/show form and search
 values are passed separately using Connector/Python `%s` parameters, never
-inserted into the SQL text. Each movie/customer write commits on success and rolls back
+inserted into the SQL text. Each movie/customer/show write commits on success and rolls back
 on a database error. Cursors and connections are closed after use. Existing
 report queries and booking workflows remain for later increments.

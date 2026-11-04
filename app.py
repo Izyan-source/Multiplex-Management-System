@@ -4,6 +4,7 @@ import os
 import re
 import secrets
 from decimal import Decimal
+from datetime import date, time
 
 import click
 from flask import Flask, abort, flash, redirect, render_template, request, session, url_for
@@ -13,6 +14,7 @@ from db import (
     add_movie, database_error_message, delete_movie, get_dashboard_counts,
     get_movie, get_movies, update_movie,
     add_customer, delete_customer, get_customer, get_customers, update_customer,
+    add_show, delete_show, get_show, get_shows, get_screens, update_show,
 )
 
 
@@ -36,6 +38,7 @@ def protect_movie_forms():
     if request.method == "POST" and request.endpoint in {
         "movie_add", "movie_edit", "movie_delete",
         "customer_add", "customer_edit", "customer_delete",
+        "show_add", "show_edit", "show_delete",
     }:
         expected = session.get("csrf_token", "")
         submitted = request.form.get("csrf_token", "")
@@ -298,6 +301,145 @@ def customer_delete(customer_id):
             flash("Customer deleted successfully.", "success")
             return redirect(url_for("customers"))
     return render_template("customers/delete.html", customer=customer, error=error_message), status
+
+
+def validate_show(form, movies, screens, show_id=None):
+    """Validate form values and references using the current database choices."""
+    show = {key: form.get(key, "").strip() for key in (
+        "Show_ID", "Movie_ID", "Screen_ID", "Show_Date", "Show_Time", "Ticket_Price"
+    )}
+    errors = []
+    if show_id is not None:
+        show["Show_ID"] = show_id
+    elif not re.fullmatch(r"[A-Za-z0-9_-]{1,10}", show["Show_ID"]):
+        errors.append("Show ID must contain 1–10 letters, numbers, hyphens, or underscores.")
+    if show["Movie_ID"] not in {movie["Movie_ID"] for movie in movies}:
+        errors.append("Select a movie that exists in the database.")
+    if show["Screen_ID"] not in {screen["Screen_ID"] for screen in screens}:
+        errors.append("Select a screen that exists in the database.")
+    try:
+        if not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", show["Show_Date"]):
+            raise ValueError
+        parsed_date = date.fromisoformat(show["Show_Date"])
+        if parsed_date.year < 1000:
+            raise ValueError
+    except ValueError:
+        errors.append("Enter a valid show date between 1000-01-01 and 9999-12-31.")
+    try:
+        if not re.fullmatch(r"[0-9]{2}:[0-9]{2}(?::[0-9]{2})?", show["Show_Time"]):
+            raise ValueError
+        show["Show_Time"] = time.fromisoformat(show["Show_Time"]).isoformat()
+    except ValueError:
+        errors.append("Enter a valid time from 00:00:00 to 23:59:59.")
+    price = show["Ticket_Price"]
+    # DECIMAL(8,2) allows up to six digits before the decimal point.
+    if not re.fullmatch(r"[0-9]{1,6}(?:\.[0-9]{1,2})?", price) or Decimal(price) <= 0:
+        errors.append("Ticket price must be between 0.01 and 999999.99, with at most two decimal places.")
+    else:
+        show["Ticket_Price"] = Decimal(price)
+    return show, errors
+
+
+def show_error_message(error):
+    if isinstance(error, ValueError):
+        return database_error_message(error)
+    if error.errno == 1062:
+        return "That Show ID already exists. Please choose a different ID."
+    if error.errno == 1451:
+        return "This show cannot be deleted because it has existing bookings. No records were changed."
+    if error.errno == 1452:
+        return "The selected movie or screen no longer exists. Reload the form and choose an existing record."
+    if error.errno in (1045, 1698, 1049, 1044, 1142, 2002, 2003, 2005):
+        return database_error_message(error)
+    return "The show operation could not be completed. Check the database connection and Show table, then try again."
+
+
+@app.route("/shows")
+def shows():
+    search = request.args.get("q", "").strip()
+    try:
+        records = get_shows(search)
+    except (Error, ValueError) as error:
+        return render_template("shows/list.html", shows=None, search=search,
+                               error=show_error_message(error)), 503
+    return render_template("shows/list.html", shows=records, search=search, error=None)
+
+
+@app.route("/shows/add", methods=["GET", "POST"])
+def show_add():
+    try:
+        movies, screens = get_movies(), get_screens()
+    except (Error, ValueError) as error:
+        return render_template("shows/list.html", shows=None, search="",
+                               error=show_error_message(error)), 503
+    show, errors, status = {}, [], 200
+    if request.method == "POST":
+        show, errors = validate_show(request.form, movies, screens)
+        status = 400
+        if not errors:
+            try:
+                add_show(show)
+            except (Error, ValueError) as error:
+                errors = [show_error_message(error)]
+                status = 409 if getattr(error, "errno", None) in (1062, 1452) else 503
+            else:
+                flash("Show scheduled successfully.", "success")
+                return redirect(url_for("shows"))
+    return render_template("shows/form.html", show=show, editing=False, errors=errors,
+                           movies=movies, screens=screens), status
+
+
+@app.route("/shows/<show_id>/edit", methods=["GET", "POST"])
+def show_edit(show_id):
+    try:
+        show = get_show(show_id)
+        if show is None:
+            abort(404, description="Show not found.")
+        movies, screens = get_movies(), get_screens()
+    except (Error, ValueError) as error:
+        return render_template("shows/list.html", shows=None, search="",
+                               error=show_error_message(error)), 503
+    errors, status = [], 200
+    if request.method == "POST":
+        show, errors = validate_show(request.form, movies, screens, show_id)
+        status = 400
+        if not errors:
+            try:
+                exists = update_show(show_id, show)
+            except (Error, ValueError) as error:
+                errors = [show_error_message(error)]
+                status = 409 if getattr(error, "errno", None) == 1452 else 503
+            else:
+                if not exists:
+                    abort(404, description="Show not found.")
+                flash("Show updated successfully.", "success")
+                return redirect(url_for("shows"))
+    return render_template("shows/form.html", show=show, editing=True, errors=errors,
+                           movies=movies, screens=screens), status
+
+
+@app.route("/shows/<show_id>/delete", methods=["GET", "POST"])
+def show_delete(show_id):
+    try:
+        show = get_show(show_id)
+    except (Error, ValueError) as error:
+        return render_template("shows/list.html", shows=None, search="",
+                               error=show_error_message(error)), 503
+    if show is None:
+        abort(404, description="Show not found.")
+    error_message, status = None, 200
+    if request.method == "POST":
+        try:
+            deleted = delete_show(show_id)
+        except (Error, ValueError) as error:
+            error_message = show_error_message(error)
+            status = 409 if getattr(error, "errno", None) == 1451 else 503
+        else:
+            if not deleted:
+                abort(404, description="Show not found.")
+            flash("Show deleted successfully.", "success")
+            return redirect(url_for("shows"))
+    return render_template("shows/delete.html", show=show, error=error_message), status
 
 
 @app.route("/")

@@ -1,0 +1,70 @@
+{% extends 'base.html' %}
+{% block title %}{{ 'Edit Show' if editing else 'Schedule Show' }}{% endblock %}
+{% block content %}
+<header class="page-header">
+    <div>
+        <p class="eyebrow">SCHEDULE</p>
+        <h1>{{ 'Edit Show' if editing else 'Schedule Show' }}</h1>
+        <p class="text-secondary mb-0">Enter the show details below. All fields are required.</p>
+    </div>
+    <a class="btn btn-outline-secondary" href="{{ url_for('shows') }}">Back to Shows</a>
+</header>
+{% if errors %}
+<div class="alert alert-danger" role="alert">
+    <p class="fw-semibold mb-2">Please check the following:</p>
+    <ul class="mb-0">{% for error in errors %}<li>{{ error }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
+{% if not movies or not screens %}
+<div class="alert alert-warning" role="alert">Scheduling requires at least one existing movie and one existing screen. Check the available records before continuing.</div>
+{% endif %}
+<section class="card overview-panel movie-form">
+    <div class="card-body">
+        <form method="post" action="{{ url_for('show_edit', show_id=show.Show_ID) if editing else url_for('show_add') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label" for="Show_ID">Show ID</label>
+                    <input class="form-control" id="Show_ID" name="Show_ID" value="{{ show.get('Show_ID') or '' }}" maxlength="10" required {% if editing %}readonly{% else %}pattern="[A-Za-z0-9_\-]{1,10}"{% endif %} aria-describedby="id-help">
+                    <div class="form-text" id="id-help">{% if editing %}Show IDs cannot be changed.{% else %}Up to 10 letters, numbers, hyphens, or underscores.{% endif %}</div>
+                </div>
+                <div class="col-md-8">
+                    <label class="form-label" for="Movie_ID">Movie</label>
+                    <select class="form-select" id="Movie_ID" name="Movie_ID" required>
+                        <option value="">Select a movie</option>
+                        {% for movie in movies %}
+                        <option value="{{ movie.Movie_ID }}"{% if show.get('Movie_ID') == movie.Movie_ID %} selected{% endif %}>{{ movie.Movie_Name or 'Unnamed movie' }} ({{ movie.Movie_ID }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-12">
+                    <label class="form-label" for="Screen_ID">Screen</label>
+                    <select class="form-select" id="Screen_ID" name="Screen_ID" required>
+                        <option value="">Select a screen</option>
+                        {% for screen in screens %}
+                        <option value="{{ screen.Screen_ID }}"{% if show.get('Screen_ID') == screen.Screen_ID %} selected{% endif %}>{{ screen.Multiplex_Name or 'Unassigned multiplex' }} — {{ screen.Screen_Name or 'Unnamed screen' }} ({{ screen.Screen_ID }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label" for="Show_Date">Show Date</label>
+                    <input class="form-control" type="date" id="Show_Date" name="Show_Date" value="{{ show.get('Show_Date') or '' }}" min="1000-01-01" max="9999-12-31" required>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label" for="Show_Time">Show Time</label>
+                    <input class="form-control" type="time" id="Show_Time" name="Show_Time" value="{{ show.get('Show_Time') or '' }}" step="1" required>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label" for="Ticket_Price">Ticket Price</label>
+                    <input class="form-control" type="number" id="Ticket_Price" name="Ticket_Price" value="{{ show.get('Ticket_Price') if show.get('Ticket_Price') is not none else '' }}" min="0.01" max="999999.99" step="0.01" required aria-describedby="price-help">
+                    <div class="form-text" id="price-help">Positive amount, with up to two decimal places.</div>
+                </div>
+            </div>
+            <div class="d-flex gap-2 mt-4">
+                <button class="btn btn-primary movie-primary" type="submit"{% if not movies or not screens %} disabled{% endif %}>{{ 'Save Changes' if editing else 'Schedule Show' }}</button>
+                <a class="btn btn-outline-secondary" href="{{ url_for('shows') }}">Cancel</a>
+            </div>
+        </form>
+    </div>
+</section>
+{% endblock %}

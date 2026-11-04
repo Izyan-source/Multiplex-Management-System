@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+{% block title %}Shows{% endblock %}
+{% block content %}
+<header class="page-header">
+    <div>
+        <p class="eyebrow">SCHEDULE</p>
+        <h1>Shows</h1>
+        <p class="text-secondary mb-0">Browse and manage your show schedule.</p>
+    </div>
+    <a class="btn btn-primary movie-primary" href="{{ url_for('show_add') }}">Schedule Show</a>
+</header>
+{% for category, message in get_flashed_messages(with_categories=true) %}
+<div class="alert alert-{{ category }}" role="status">{{ message }}</div>
+{% endfor %}
+{% if error %}<div class="alert alert-warning" role="alert">{{ error }}</div>{% endif %}
+<section class="card overview-panel" aria-label="Show schedule">
+    <div class="card-body">
+        <form method="get" action="{{ url_for('shows') }}" class="row g-2 align-items-end mb-4" role="search">
+            <div class="col-12 col-md-7 col-lg-6">
+                <label class="form-label" for="show-search">Search by movie name</label>
+                <input class="form-control" type="search" id="show-search" name="q" value="{{ search }}" placeholder="Enter a movie name">
+            </div>
+            <div class="col-auto"><button class="btn btn-primary movie-primary" type="submit">Search</button></div>
+            {% if search %}<div class="col-auto"><a class="btn btn-outline-secondary" href="{{ url_for('shows') }}">Clear</a></div>{% endif %}
+        </form>
+        {% if shows is not none %}
+        <div class="table-responsive">
+            <table class="table align-middle movie-table">
+                <caption>{{ shows|length }} show{% if shows|length != 1 %}s{% endif %}{% if search %} matching your search{% endif %}</caption>
+                <thead><tr>
+                    <th scope="col">Show ID</th><th scope="col">Movie Name</th>
+                    <th scope="col">Screen Name</th><th scope="col">Show Date</th>
+                    <th scope="col">Show Time</th><th scope="col">Ticket Price</th>
+                    <th scope="col" class="text-end">Actions</th>
+                </tr></thead>
+                <tbody>
+                {% for show in shows %}
+                <tr>
+                    <td class="text-nowrap">{{ show.Show_ID }}</td>
+                    <td class="fw-semibold">{{ show.Movie_Name or '—' }}</td>
+                    <td>{{ show.Screen_Name or '—' }}</td>
+                    <td class="text-nowrap">{{ show.Show_Date or '—' }}</td>
+                    <td class="text-nowrap">{{ show.Show_Time or '—' }}</td>
+                    <td>{{ '%.2f'|format(show.Ticket_Price) if show.Ticket_Price is not none else '—' }}</td>
+                    <td class="text-end text-nowrap">
+                        <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('show_edit', show_id=show.Show_ID) }}" aria-label="Edit show {{ show.Show_ID }}">Edit</a>
+                        <a class="btn btn-sm btn-outline-danger ms-1" href="{{ url_for('show_delete', show_id=show.Show_ID) }}" aria-label="Delete show {{ show.Show_ID }}">Delete</a>
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="7" class="text-center text-secondary py-5">{% if search %}No shows match your search.{% else %}No shows yet. Use Schedule Show to create your first record.{% endif %}</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}
