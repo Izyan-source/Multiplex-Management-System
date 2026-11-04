@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Dashboard{% endblock %} · Multiplex Management System</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='vendor/bootstrap.min.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <a class="visually-hidden-focusable skip-link" href="#main-content">Skip to content</a>
+    <div class="app-layout">
+        <aside class="sidebar">
+            <a class="brand" href="{{ url_for('dashboard') }}">
+                <span class="brand-mark" aria-hidden="true">M</span>
+                <span>Multiplex<span class="brand-subtitle">Management System</span></span>
+            </a>
+            <p class="nav-label">WORKSPACE</p>
+            <nav class="nav flex-column gap-2" aria-label="Main navigation">
+                <a class="nav-link active" href="{{ url_for('dashboard') }}" aria-current="page">Dashboard</a>
+                {% for label in ['Movies', 'Customers', 'Shows', 'Bookings', 'Payments', 'Food Orders'] %}
+                <span class="nav-link disabled" role="link" aria-disabled="true">
+                    {{ label }}<span class="soon-label">Soon</span>
+                </span>
+                {% endfor %}
+            </nav>
+            <div class="sidebar-note">Your cinema, at a glance.</div>
+        </aside>
+        <main id="main-content" class="main-content">
+            {% block content %}{% endblock %}
+            <footer>Multiplex Management System <span>DBMS project</span></footer>
+        </main>
+    </div>
+</body>
+</html>

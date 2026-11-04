@@ -1,0 +1,52 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<header class="page-header">
+    <div>
+        <p class="eyebrow">OVERVIEW</p>
+        <h1>Dashboard</h1>
+        <p class="text-secondary mb-0">A snapshot of your multiplex records.</p>
+    </div>
+    <a class="btn btn-outline-secondary refresh-button" href="{{ url_for('dashboard') }}">Refresh totals</a>
+</header>
+
+{% if error %}
+<div class="alert alert-warning connection-alert" role="alert">
+    <h2 class="h6">Dashboard data is unavailable</h2>
+    <p class="mb-0">{{ error }} After checking the connection, refresh this page.</p>
+</div>
+{% endif %}
+
+<section class="row g-3" aria-label="Database totals">
+    {% for key, label, description in [
+        ('movies', 'Total movies', 'In the movie catalogue'),
+        ('customers', 'Total customers', 'Customer records'),
+        ('bookings', 'Total bookings', 'Across all booking statuses'),
+        ('multiplexes', 'Total multiplexes', 'Cinema locations')
+    ] %}
+    <div class="col-12 col-sm-6 col-xl-3">
+        <article class="card stat-card h-100">
+            <div class="card-body">
+                <h2 class="stat-label">{{ label }}</h2>
+                <p class="stat-value">{% if counts is not none %}{{ counts[key] }}{% else %}<span aria-label="Unavailable">—</span>{% endif %}</p>
+                <p class="stat-description mb-0">{{ description }}</p>
+            </div>
+        </article>
+    </div>
+    {% endfor %}
+</section>
+
+<section class="card overview-panel mt-4" aria-labelledby="overview-title">
+    <div class="card-body">
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-3">
+            <h2 id="overview-title" class="h5 mb-0">Your database overview</h2>
+            {% if counts is not none %}
+            <span class="connection-status connected">Connected</span>
+            {% else %}
+            <span class="connection-status unavailable">Connection needs attention</span>
+            {% endif %}
+        </div>
+        <p class="text-secondary mb-0">Totals include all records, regardless of date. Refresh to see the latest counts.</p>
+    </div>
+</section>
+{% endblock %}
