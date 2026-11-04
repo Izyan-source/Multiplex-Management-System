@@ -23,11 +23,7 @@
                 <a class="nav-link{% if request.endpoint in ['shows', 'show_add', 'show_edit', 'show_delete'] %} active{% endif %}" href="{{ url_for('shows') }}"{% if request.endpoint in ['shows', 'show_add', 'show_edit', 'show_delete'] %} aria-current="page"{% endif %}>Shows</a>
                 <a class="nav-link{% if request.endpoint in ['bookings', 'booking_add', 'booking_detail', 'booking_status'] %} active{% endif %}" href="{{ url_for('bookings') }}"{% if request.endpoint in ['bookings', 'booking_add', 'booking_detail', 'booking_status'] %} aria-current="page"{% endif %}>Bookings</a>
                 <a class="nav-link{% if request.endpoint in ['payments', 'payment_add', 'payment_edit', 'payment_detail', 'payment_delete'] %} active{% endif %}" href="{{ url_for('payments') }}"{% if request.endpoint in ['payments', 'payment_add', 'payment_edit', 'payment_detail', 'payment_delete'] %} aria-current="page"{% endif %}>Payments</a>
-                {% for label in ['Food Orders'] %}
-                <span class="nav-link disabled" role="link" aria-disabled="true">
-                    {{ label }}<span class="soon-label">Soon</span>
-                </span>
-                {% endfor %}
+                <a class="nav-link{% if request.endpoint in ['food_orders', 'food_order_add', 'food_order_edit', 'food_order_detail', 'food_order_delete'] %} active{% endif %}" href="{{ url_for('food_orders') }}"{% if request.endpoint in ['food_orders', 'food_order_add', 'food_order_edit', 'food_order_detail', 'food_order_delete'] %} aria-current="page"{% endif %}>Food Orders</a>
             </nav>
             <div class="sidebar-note">Your cinema, at a glance.</div>
         </aside>

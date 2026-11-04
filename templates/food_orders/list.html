@@ -1,0 +1,44 @@
+{% extends 'base.html' %}
+{% block title %}Food Orders{% endblock %}
+{% block content %}
+<header class="page-header">
+    <div><p class="eyebrow">FOOD ORDERS</p><h1>Food Orders</h1>
+        <p class="text-secondary mb-0">Browse and manage food orders linked to bookings.</p></div>
+    <a class="btn btn-primary movie-primary" href="{{ url_for('food_order_add') }}">Add Food Order</a>
+</header>
+{% for category, message in get_flashed_messages(with_categories=true) %}<div class="alert alert-{{ category }}" role="status">{{ message }}</div>{% endfor %}
+{% if error %}<div class="alert alert-warning" role="alert">{{ error }}</div>{% endif %}
+<section class="card overview-panel" aria-label="Food orders"><div class="card-body">
+    <form method="get" action="{{ url_for('food_orders') }}" class="row g-2 align-items-end mb-4" role="search">
+        <div class="col-12 col-md-8">
+            <label class="form-label" for="food-order-search">Search by Order ID, Booking ID, Customer Name or Item Name</label>
+            <input class="form-control" type="search" id="food-order-search" name="q" value="{{ search }}" placeholder="Enter an ID, customer name or item name">
+        </div>
+        <div class="col-auto"><button class="btn btn-primary movie-primary" type="submit">Search</button></div>
+        {% if search %}<div class="col-auto"><a class="btn btn-outline-secondary" href="{{ url_for('food_orders') }}">Clear</a></div>{% endif %}
+    </form>
+    {% if orders is not none %}
+    <div class="table-responsive"><table class="table align-middle movie-table">
+        <caption>{{ orders|length }} food order{% if orders|length != 1 %}s{% endif %}{% if search %} matching your search{% endif %}</caption>
+        <thead><tr>
+            <th scope="col">Order ID</th><th scope="col">Booking ID</th><th scope="col">Customer Name</th>
+            <th scope="col">Movie Name</th><th scope="col">Item Name</th><th scope="col">Quantity</th>
+            <th scope="col">Total Price</th><th scope="col" class="text-end">Actions</th>
+        </tr></thead>
+        <tbody>{% for order in orders %}<tr>
+            <td class="fw-semibold text-nowrap">{{ order.Order_ID }}</td>
+            <td>{% if order.Booking_ID %}<a href="{{ url_for('booking_detail', booking_id=order.Booking_ID) }}">{{ order.Booking_ID }}</a>{% else %}—{% endif %}</td>
+            <td>{{ order.Customer_Name or '—' }}</td><td>{{ order.Movie_Name or '—' }}</td>
+            <td class="text-break">{{ order.Item_Name or '—' }}</td>
+            <td>{{ order.Quantity if order.Quantity is not none else '—' }}</td>
+            <td>{{ '%.2f'|format(order.Total_Price) if order.Total_Price is not none else '—' }}</td>
+            <td class="text-end text-nowrap">
+                <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('food_order_detail', order_id=order.Order_ID) }}" aria-label="View food order {{ order.Order_ID }}">View</a>
+                <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('food_order_edit', order_id=order.Order_ID) }}" aria-label="Edit food order {{ order.Order_ID }}">Edit</a>
+                <a class="btn btn-sm btn-outline-danger" href="{{ url_for('food_order_delete', order_id=order.Order_ID) }}" aria-label="Delete food order {{ order.Order_ID }}">Delete</a>
+            </td>
+        </tr>{% else %}<tr><td colspan="8" class="text-center text-secondary py-5">{% if search %}No food orders match your search.{% else %}No food orders yet. Use Add Food Order to create a record.{% endif %}</td></tr>{% endfor %}</tbody>
+    </table></div>
+    {% endif %}
+</div></section>
+{% endblock %}

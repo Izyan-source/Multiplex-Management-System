@@ -596,3 +596,84 @@ def delete_payment(payment_id):
         except Error:
             connection.rollback()
             raise
+
+
+# LEFT JOINs also keep older food orders with nullable relationships visible.
+FOOD_ORDER_SELECT = """
+    SELECT f.Order_ID, f.Booking_ID, f.Item_Name, f.Quantity, f.Total_Price,
+           b.Customer_ID, b.Show_ID, b.Booking_Status, c.Customer_Name,
+           m.Movie_Name, s.Show_Date, CAST(s.Show_Time AS CHAR) AS Show_Time
+    FROM Food_Order AS f
+    LEFT JOIN Booking AS b ON f.Booking_ID = b.Booking_ID
+    LEFT JOIN Customer AS c ON b.Customer_ID = c.Customer_ID
+    LEFT JOIN `Show` AS s ON b.Show_ID = s.Show_ID
+    LEFT JOIN Movie AS m ON s.Movie_ID = m.Movie_ID
+"""
+
+
+def get_food_orders(search=""):
+    pattern = '%' + search.replace('!', '!!').replace('%', '!%').replace('_', '!_') + '%'
+    with get_connection() as connection:
+        with connection.cursor(dictionary=True) as cursor:
+            cursor.execute(FOOD_ORDER_SELECT + """
+                WHERE %s = '' OR f.Order_ID LIKE %s ESCAPE '!'
+                    OR f.Booking_ID LIKE %s ESCAPE '!'
+                    OR c.Customer_Name LIKE %s ESCAPE '!'
+                    OR f.Item_Name LIKE %s ESCAPE '!'
+                ORDER BY f.Order_ID
+            """, (search, pattern, pattern, pattern, pattern))
+            return cursor.fetchall()
+
+
+def get_food_order(order_id):
+    with get_connection() as connection:
+        with connection.cursor(dictionary=True) as cursor:
+            cursor.execute(FOOD_ORDER_SELECT + " WHERE f.Order_ID = %s", (order_id,))
+            return cursor.fetchone()
+
+
+def add_food_order(order):
+    with get_connection() as connection:
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute("""
+                    INSERT INTO Food_Order (Order_ID, Booking_ID, Item_Name, Quantity, Total_Price)
+                    VALUES (%s, %s, %s, %s, %s)
+                """, (order['Order_ID'], order['Booking_ID'], order['Item_Name'],
+                      order['Quantity'], order['Total_Price']))
+            connection.commit()
+        except Error:
+            connection.rollback()
+            raise
+
+
+def update_food_order(order_id, order):
+    """Keep the ID fixed and accept unchanged submissions, like the other modules."""
+    with get_connection() as connection:
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute("""
+                    UPDATE Food_Order SET Booking_ID = %s, Item_Name = %s,
+                        Quantity = %s, Total_Price = %s WHERE Order_ID = %s
+                """, (order['Booking_ID'], order['Item_Name'], order['Quantity'],
+                      order['Total_Price'], order_id))
+                cursor.execute("SELECT Order_ID FROM Food_Order WHERE Order_ID = %s", (order_id,))
+                exists = cursor.fetchone() is not None
+            connection.commit()
+            return exists
+        except Error:
+            connection.rollback()
+            raise
+
+
+def delete_food_order(order_id):
+    with get_connection() as connection:
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute("DELETE FROM Food_Order WHERE Order_ID = %s", (order_id,))
+                deleted = cursor.rowcount > 0
+            connection.commit()
+            return deleted
+        except Error:
+            connection.rollback()
+            raise

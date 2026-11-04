@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+{% block title %}Food Order {{ order.Order_ID }}{% endblock %}
+{% block content %}
+<header class="page-header">
+    <div><p class="eyebrow">FOOD ORDERS</p><h1>Food Order {{ order.Order_ID }}</h1>
+        <p class="text-secondary mb-0">Order details and the associated booking.</p></div>
+    <a class="btn btn-outline-secondary" href="{{ url_for('food_orders') }}">Back to Food Orders</a>
+</header>
+{% for category, message in get_flashed_messages(with_categories=true) %}<div class="alert alert-{{ category }}" role="status">{{ message }}</div>{% endfor %}
+<section class="card overview-panel"><div class="card-body">
+    <h2 class="h5 mb-4">Order details</h2>
+    <dl class="row">
+        {% for label, key in [('Order ID', 'Order_ID'), ('Booking ID', 'Booking_ID'), ('Customer Name', 'Customer_Name'), ('Movie Name', 'Movie_Name'), ('Item Name', 'Item_Name'), ('Quantity', 'Quantity'), ('Total Price', 'Total_Price'), ('Booking Status', 'Booking_Status'), ('Show Date', 'Show_Date'), ('Show Time', 'Show_Time')] %}
+        <dt class="col-sm-4 text-secondary fw-normal">{{ label }}</dt>
+        <dd class="col-sm-8 text-break">{% if order[key] is none %}—{% elif key == 'Total_Price' %}{{ '%.2f'|format(order[key]) }}{% else %}{{ order[key] }}{% endif %}</dd>
+        {% endfor %}
+    </dl>
+    <div class="d-flex flex-wrap gap-2">
+        <a class="btn btn-primary movie-primary" href="{{ url_for('food_order_edit', order_id=order.Order_ID) }}">Edit Food Order</a>
+        <a class="btn btn-outline-danger" href="{{ url_for('food_order_delete', order_id=order.Order_ID) }}">Delete Food Order</a>
+        {% if order.Booking_ID %}<a class="btn btn-outline-secondary" href="{{ url_for('booking_detail', booking_id=order.Booking_ID) }}">Open Booking</a>{% endif %}
+    </div>
+</div></section>
+{% endblock %}

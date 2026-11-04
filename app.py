@@ -19,6 +19,7 @@ from db import (
     get_available_seats, update_booking_status,
     PaymentRuleError, get_payments, get_payment, get_payment_bookings,
     add_payment, update_payment, delete_payment,
+    get_food_orders, get_food_order, add_food_order, update_food_order, delete_food_order,
 )
 
 
@@ -45,6 +46,7 @@ def protect_movie_forms():
         "show_add", "show_edit", "show_delete",
         "booking_add", "booking_status",
         "payment_add", "payment_edit", "payment_delete",
+        "food_order_add", "food_order_edit", "food_order_delete",
     }:
         expected = session.get("csrf_token", "")
         submitted = request.form.get("csrf_token", "")
@@ -726,6 +728,152 @@ def payment_delete(payment_id):
             flash('Payment record deleted.', 'success')
             return redirect(url_for('payments'))
     return render_template('payments/delete.html', payment=payment, error=error_message), status
+
+
+def validate_food_order(form, bookings, order_id=None):
+    """Validate against the existing Food_Order column sizes and types."""
+    order = {key: form.get(key, '').strip() for key in (
+        'Order_ID', 'Booking_ID', 'Item_Name', 'Quantity', 'Total_Price'
+    )}
+    errors = []
+    if order_id is not None:
+        order['Order_ID'] = order_id
+    elif not re.fullmatch(r'[A-Za-z0-9_-]{1,10}', order['Order_ID']):
+        errors.append('Order ID must contain 1–10 letters, numbers, hyphens, or underscores.')
+    if not order['Booking_ID'] or order['Booking_ID'] not in {booking['Booking_ID'] for booking in bookings}:
+        errors.append('Select a booking that exists in the database.')
+    item = order['Item_Name']
+    if not item or len(item) > 100 or any(ord(char) < 32 or ord(char) == 127 for char in item):
+        errors.append('Item name is required and must be at most 100 characters without control characters.')
+    quantity = order['Quantity']
+    if not re.fullmatch(r'[0-9]{1,10}', quantity) or not 1 <= int(quantity) <= 2147483647:
+        errors.append('Quantity must be a positive whole number (maximum 2147483647).')
+    else:
+        order['Quantity'] = int(quantity)
+    price = order['Total_Price']
+    if not re.fullmatch(r'[0-9]{1,6}(?:\.[0-9]{1,2})?', price) or Decimal(price) <= 0:
+        errors.append('Total price must be between 0.01 and 999999.99, with at most two decimal places.')
+    else:
+        order['Total_Price'] = Decimal(price)
+    return order, errors
+
+
+def food_order_error_message(error):
+    if isinstance(error, ValueError):
+        return database_error_message(error)
+    if error.errno == 1062:
+        return 'That Order ID already exists. Please choose a different ID.'
+    if error.errno == 1452:
+        return 'The selected booking no longer exists. Reload the form and choose an existing booking.'
+    if error.errno == 1451:
+        return 'This food order cannot be deleted because another record references it. No records were changed.'
+    if error.errno in (3819, 1644):
+        return 'A database constraint rejected this food order. No changes were saved.'
+    if error.errno in (1205, 1213):
+        return 'Another operation is using this record. No changes were saved; reload and try again.'
+    if error.errno in (1045, 1698, 1049, 1044, 1142, 2002, 2003, 2005):
+        return database_error_message(error)
+    return 'The food order operation could not be completed. Check the database connection and try again.'
+
+
+@app.route('/food-orders')
+def food_orders():
+    search = request.args.get('q', '').strip()
+    try:
+        records = get_food_orders(search)
+    except (Error, ValueError) as error:
+        return render_template('food_orders/list.html', orders=None, search=search,
+                               error=food_order_error_message(error)), 503
+    return render_template('food_orders/list.html', orders=records, search=search, error=None)
+
+
+@app.route('/food-orders/add', methods=['GET', 'POST'])
+def food_order_add():
+    try:
+        bookings = get_bookings()
+    except (Error, ValueError) as error:
+        return render_template('food_orders/list.html', orders=None, search='',
+                               error=food_order_error_message(error)), 503
+    order, errors, status = {}, [], 200
+    if request.method == 'POST':
+        order, errors = validate_food_order(request.form, bookings)
+        status = 400
+        if not errors:
+            try:
+                add_food_order(order)
+            except (Error, ValueError) as error:
+                errors = [food_order_error_message(error)]
+                status = 409 if getattr(error, 'errno', None) in (1062, 1452, 3819, 1644, 1205, 1213) else 503
+            else:
+                flash('Food order added successfully.', 'success')
+                return redirect(url_for('food_order_detail', order_id=order['Order_ID']))
+    return render_template('food_orders/form.html', order=order, bookings=bookings,
+                           editing=False, errors=errors), status
+
+
+@app.route('/food-orders/<order_id>')
+def food_order_detail(order_id):
+    try:
+        order = get_food_order(order_id)
+    except (Error, ValueError) as error:
+        return render_template('food_orders/list.html', orders=None, search='',
+                               error=food_order_error_message(error)), 503
+    if order is None:
+        abort(404, description='Food order not found.')
+    return render_template('food_orders/detail.html', order=order)
+
+
+@app.route('/food-orders/<order_id>/edit', methods=['GET', 'POST'])
+def food_order_edit(order_id):
+    try:
+        order = get_food_order(order_id)
+        if order is None:
+            abort(404, description='Food order not found.')
+        bookings = get_bookings()
+    except (Error, ValueError) as error:
+        return render_template('food_orders/list.html', orders=None, search='',
+                               error=food_order_error_message(error)), 503
+    errors, status = [], 200
+    if request.method == 'POST':
+        order, errors = validate_food_order(request.form, bookings, order_id)
+        status = 400
+        if not errors:
+            try:
+                exists = update_food_order(order_id, order)
+            except (Error, ValueError) as error:
+                errors = [food_order_error_message(error)]
+                status = 409 if getattr(error, 'errno', None) in (1452, 3819, 1644, 1205, 1213) else 503
+            else:
+                if not exists:
+                    abort(404, description='Food order not found.')
+                flash('Food order updated successfully.', 'success')
+                return redirect(url_for('food_order_detail', order_id=order_id))
+    return render_template('food_orders/form.html', order=order, bookings=bookings,
+                           editing=True, errors=errors), status
+
+
+@app.route('/food-orders/<order_id>/delete', methods=['GET', 'POST'])
+def food_order_delete(order_id):
+    try:
+        order = get_food_order(order_id)
+    except (Error, ValueError) as error:
+        return render_template('food_orders/list.html', orders=None, search='',
+                               error=food_order_error_message(error)), 503
+    if order is None:
+        abort(404, description='Food order not found.')
+    error_message, status = None, 200
+    if request.method == 'POST':
+        try:
+            deleted = delete_food_order(order_id)
+        except (Error, ValueError) as error:
+            error_message = food_order_error_message(error)
+            status = 409 if getattr(error, 'errno', None) in (1451, 3819, 1644, 1205, 1213) else 503
+        else:
+            if not deleted:
+                abort(404, description='Food order not found.')
+            flash('Food order deleted successfully.', 'success')
+            return redirect(url_for('food_orders'))
+    return render_template('food_orders/delete.html', order=order, error=error_message), status
 
 
 @app.route("/")

@@ -2,15 +2,15 @@
 
 A simple Flask interface for the existing MySQL `MultiplexDB` database.
 The application contains the dashboard, four live record counts, Movies,
-Customers, Shows, Bookings and Payments management, and a read-only connection check.
-Food Orders remains disabled until its page is built.
+Customers, Shows, Bookings, Payments and Food Orders management, and a read-only
+connection check.
 
 ## Files
 
 - `app.py`: dashboard, management routes, validation, and `check-db` command.
 - `db.py`: environment configuration, connection, counts, and parameterized management queries.
-- `templates/`: shared layout, dashboard, movie/customer/show pages, booking pages, and payment list/form/details/delete pages.
-- `tests/test_movies.py`, `tests/test_customers.py`, `tests/test_shows.py`, `tests/test_bookings.py`, `tests/test_payments.py`: automated checks that do not connect to MySQL.
+- `templates/`: shared layout, dashboard, movie/customer/show pages, booking pages, and payment/food order list/form/details/delete pages.
+- `tests/test_movies.py`, `tests/test_customers.py`, `tests/test_shows.py`, `tests/test_bookings.py`, `tests/test_payments.py`, `tests/test_food_orders.py`: automated checks that do not connect to MySQL.
 - `static/`: custom CSS and local Bootstrap 5.3.8 CSS.
 - `.env.example`: connection settings template.
 - `dbms.sql`: original project file, unchanged and never executed by the app.
@@ -261,7 +261,7 @@ Open http://127.0.0.1:5000/payments or choose Payments in the sidebar.
 - These pages record information only: they do not collect money, charge a
   card, verify a bank payment, transfer funds or issue refunds.
 
-All 86 automated tests passed: 23 Payment tests plus the existing 63 tests.
+At the Payments increment, all 86 automated tests passed: 23 Payment tests plus the existing 63 tests.
 Run `python -m unittest discover -s tests -v` to repeat these mocked checks;
 they do not connect to or change MySQL.
 
@@ -279,6 +279,47 @@ against linked booking totals, shared payments remain permitted, and edits do
 not have a separate audit-history table. The downgrade guard protects writes
 through this application; direct external SQL still has the original schema's
 limitations. No tables or triggers were created or changed.
+
+## Food Orders management
+
+Open http://127.0.0.1:5000/food-orders or choose Food Orders in the sidebar.
+
+- The list displays Order ID, Booking ID, customer, movie, item, quantity and
+  total price. SQL joins connect Food_Order to Booking, Customer, Show and Movie.
+  LEFT JOINs keep legacy records with nullable relationships visible.
+- Search matches part of an Order ID, Booking ID, customer name or item name.
+  Apostrophes and wildcard characters such as `%` and `_` are treated literally.
+- Add Food Order uses existing bookings in a dropdown with customer, movie and
+  booking status for context. Enter the item name yourself; no menu is created.
+- Order IDs must be unique and contain 1–10 letters, numbers, hyphens or
+  underscores. Item names are required and allow up to 100 characters.
+  Quantity must be a whole number from 1 to 2147483647. Total price must be
+  0.01–999999.99 with at most two decimal places, matching the existing columns.
+- Edit permits changing the booking, item name, quantity and total price.
+  Order ID remains fixed. Both add and edit validate inputs on the server;
+  the foreign key also rejects bookings removed after validation.
+- View displays all order fields and joined booking context. Open Booking
+  links to the existing booking details page.
+- Delete opens a confirmation page; only submitting its form deletes the row.
+  The booking remains unchanged. Constraint failures display a friendly error.
+  All writes use bound SQL parameters, commit on success and roll back on error.
+
+All 110 automated tests passed, including 24 Food Orders tests and all 86 prior
+tests. Repeat them with `python -m unittest discover -s tests -v`; these tests
+mock MySQL and never change database records.
+
+Live MySQL checks passed for joined listings, all four search fields, creation,
+duplicate IDs, invalid inputs, editing/reassigning bookings, unchanged edits,
+details and deletion. Direct invalid-reference checks verified real foreign-key
+rejection and rollback. All temporary orders were removed; snapshots confirmed
+every original row in all ten tables, table definitions and triggers unchanged.
+Browser checks passed for the list, details, edit form and delete confirmation.
+
+The existing schema has no table referencing Food_Order, so blocked deletion
+was tested with mocked constraint errors rather than changing the schema.
+Totals are entered manually; there is no unit-price calculation, inventory or
+menu. Any existing booking is selectable, including cancelled bookings, and
+food-order changes do not update booking totals or payments.
 
 ## Connection troubleshooting
 
@@ -301,4 +342,4 @@ The dashboard query is fixed SQL with no input values. Management form and searc
 values are passed separately using Connector/Python `%s` parameters, never
 inserted into the SQL text. Each write commits on success and rolls back
 on a database error. Cursors and connections are closed after use. Existing
-report queries and the Food Orders page remain for later increments.
+report queries remain available in the original SQL file.
