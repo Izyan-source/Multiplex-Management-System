@@ -1,9 +1,10 @@
-"""Read data from the existing MySQL database. No schema or seed operations."""
+"""Queries for the existing MySQL database. No schema or seed operations."""
 
 import os
 from pathlib import Path
 
 import mysql.connector
+from mysql.connector import Error
 from dotenv import load_dotenv
 
 
@@ -73,3 +74,77 @@ def database_error_message(error):
     if error.errno in (2002, 2003, 2005):
         return "Cannot reach MySQL. Check that the server is running and DB_HOST and DB_PORT are correct."
     return "Could not read the dashboard. Check your MySQL connection and database settings."
+
+
+def get_movies(search=""):
+    """Search names literally, including names containing % or _."""
+    pattern = "%" + search.replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%"
+    with get_connection() as connection:
+        with connection.cursor(dictionary=True) as cursor:
+            cursor.execute("""
+                SELECT Movie_ID, Movie_Name, Genre, Language, Duration_Min, Rating
+                FROM Movie
+                WHERE %s = '' OR Movie_Name LIKE %s ESCAPE '!'
+                ORDER BY Movie_Name, Movie_ID
+            """, (search, pattern))
+            return cursor.fetchall()
+
+
+def get_movie(movie_id):
+    with get_connection() as connection:
+        with connection.cursor(dictionary=True) as cursor:
+            cursor.execute("""
+                SELECT Movie_ID, Movie_Name, Genre, Language, Duration_Min, Rating
+                FROM Movie WHERE Movie_ID = %s
+            """, (movie_id,))
+            return cursor.fetchone()
+
+
+def add_movie(movie):
+    with get_connection() as connection:
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute("""
+                    INSERT INTO Movie
+                        (Movie_ID, Movie_Name, Genre, Language, Duration_Min, Rating)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                """, (movie["Movie_ID"], movie["Movie_Name"], movie["Genre"],
+                      movie["Language"], movie["Duration_Min"], movie["Rating"]))
+            connection.commit()
+        except Error:
+            connection.rollback()
+            raise
+
+
+def update_movie(movie_id, movie):
+    """Return False if the movie was removed, but allow unchanged submissions."""
+    with get_connection() as connection:
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute("""
+                    UPDATE Movie SET Movie_Name = %s, Genre = %s, Language = %s,
+                        Duration_Min = %s, Rating = %s
+                    WHERE Movie_ID = %s
+                """, (movie["Movie_Name"], movie["Genre"], movie["Language"],
+                      movie["Duration_Min"], movie["Rating"], movie_id))
+                cursor.execute("SELECT Movie_ID FROM Movie WHERE Movie_ID = %s", (movie_id,))
+                exists = cursor.fetchone() is not None
+            connection.commit()
+            return exists
+        except Error:
+            connection.rollback()
+            raise
+
+
+def delete_movie(movie_id):
+    """MySQL rejects deletion if a Show still references this movie."""
+    with get_connection() as connection:
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute("DELETE FROM Movie WHERE Movie_ID = %s", (movie_id,))
+                deleted = cursor.rowcount > 0
+            connection.commit()
+            return deleted
+        except Error:
+            connection.rollback()
+            raise

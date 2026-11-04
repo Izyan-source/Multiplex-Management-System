@@ -34,6 +34,11 @@ h1 { font-size: 32px; font-weight: 700; letter-spacing: -1px; margin-bottom: 10p
 .connection-alert { border-radius: 10px; font-size: 14px; margin-bottom: 24px; }
 footer { display: flex; justify-content: space-between; gap: 16px; margin-top: auto; padding-top: 64px; color: var(--muted); font-size: 12px; }
 .skip-link { position: absolute; top: 8px; left: 8px; background: #fff; padding: 10px; z-index: 10; }
+.movie-primary { --bs-btn-bg: var(--accent); --bs-btn-border-color: var(--accent); --bs-btn-hover-bg: #5143b3; --bs-btn-hover-border-color: #5143b3; }
+.movie-table { font-size: 14px; }
+.movie-table th { color: var(--muted); font-size: 12px; font-weight: 600; white-space: nowrap; padding-bottom: 16px; }
+.movie-table td { padding-top: 16px; padding-bottom: 16px; }
+.movie-form { max-width: 850px; }
 @media (max-width: 991px) {
     .sidebar { width: 215px; padding: 24px 14px; }
     .main-content { padding: 32px 24px; }

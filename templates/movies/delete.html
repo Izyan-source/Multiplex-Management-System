@@ -1,0 +1,20 @@
+{% extends 'base.html' %}
+{% block title %}Delete Movie{% endblock %}
+{% block content %}
+<header class="page-header"><div>
+    <p class="eyebrow">CATALOGUE</p>
+    <h1>Delete Movie</h1>
+    <p class="text-secondary mb-0">Review the movie before confirming deletion.</p>
+</div></header>
+{% if error %}<div class="alert alert-danger" role="alert">{{ error }}</div>{% endif %}
+<section class="card overview-panel movie-form"><div class="card-body">
+    <h2 class="h5">{{ movie.Movie_Name or 'Unnamed movie' }}</h2>
+    <p class="text-secondary">Movie ID: {{ movie.Movie_ID }}</p>
+    <p>This will permanently remove this movie. Movies used by an existing show cannot be deleted.</p>
+    <form method="post" action="{{ url_for('movie_delete', movie_id=movie.Movie_ID) }}" class="d-flex gap-2">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn btn-danger" type="submit">Delete Movie</button>
+        <a class="btn btn-outline-secondary" href="{{ url_for('movies') }}">Back to Movies</a>
+    </form>
+</div></section>
+{% endblock %}

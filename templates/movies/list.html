@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+{% block title %}Movies{% endblock %}
+{% block content %}
+<header class="page-header">
+    <div>
+        <p class="eyebrow">CATALOGUE</p>
+        <h1>Movies</h1>
+        <p class="text-secondary mb-0">Browse and manage your movie catalogue.</p>
+    </div>
+    <a class="btn btn-primary movie-primary" href="{{ url_for('movie_add') }}">Add Movie</a>
+</header>
+{% for category, message in get_flashed_messages(with_categories=true) %}
+<div class="alert alert-{{ category }}" role="status">{{ message }}</div>
+{% endfor %}
+{% if error %}<div class="alert alert-warning" role="alert">{{ error }}</div>{% endif %}
+<section class="card overview-panel" aria-label="Movie catalogue">
+    <div class="card-body">
+        <form method="get" action="{{ url_for('movies') }}" class="row g-2 align-items-end mb-4" role="search">
+            <div class="col-12 col-md-7 col-lg-6">
+                <label class="form-label" for="movie-search">Search by movie name</label>
+                <input class="form-control" type="search" id="movie-search" name="q" value="{{ search }}" placeholder="Enter a movie name">
+            </div>
+            <div class="col-auto"><button class="btn btn-primary movie-primary" type="submit">Search</button></div>
+            {% if search %}<div class="col-auto"><a class="btn btn-outline-secondary" href="{{ url_for('movies') }}">Clear</a></div>{% endif %}
+        </form>
+        {% if movies is not none %}
+        <div class="table-responsive">
+            <table class="table align-middle movie-table">
+                <caption>{{ movies|length }} movie{% if movies|length != 1 %}s{% endif %}{% if search %} matching your search{% endif %}</caption>
+                <thead><tr>
+                    <th scope="col">Movie ID</th><th scope="col">Movie Name</th>
+                    <th scope="col">Genre</th><th scope="col">Language</th>
+                    <th scope="col">Duration</th><th scope="col">Rating</th>
+                    <th scope="col" class="text-end">Actions</th>
+                </tr></thead>
+                <tbody>
+                {% for movie in movies %}
+                <tr>
+                    <td class="text-nowrap">{{ movie.Movie_ID }}</td>
+                    <td class="fw-semibold">{{ movie.Movie_Name if movie.Movie_Name is not none else '—' }}</td>
+                    <td>{{ movie.Genre if movie.Genre is not none else '—' }}</td>
+                    <td>{{ movie.Language if movie.Language is not none else '—' }}</td>
+                    <td class="text-nowrap">{% if movie.Duration_Min is not none %}{{ movie.Duration_Min }} min{% else %}—{% endif %}</td>
+                    <td>{{ movie.Rating if movie.Rating is not none else '—' }}</td>
+                    <td class="text-end text-nowrap">
+                        <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('movie_edit', movie_id=movie.Movie_ID) }}" aria-label="Edit {{ movie.Movie_Name or movie.Movie_ID }}">Edit</a>
+                        <a class="btn btn-sm btn-outline-danger ms-1" href="{{ url_for('movie_delete', movie_id=movie.Movie_ID) }}" aria-label="Delete {{ movie.Movie_Name or movie.Movie_ID }}">Delete</a>
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="7" class="text-center text-secondary py-5">{% if search %}No movies match your search.{% else %}No movies yet. Use Add Movie to create your first record.{% endif %}</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}

@@ -1,15 +1,16 @@
 # Multiplex Management System
 
 A simple Flask interface for the existing MySQL `MultiplexDB` database.
-This first increment contains only the dashboard, four live record counts,
-and a read-only connection check. Other navigation sections are disabled until
-their pages are built.
+The application contains the dashboard, four live record counts, Movies
+management, and a read-only connection check. Other navigation sections remain
+disabled until their pages are built.
 
 ## Files
 
-- `app.py`: dashboard route and `check-db` command.
-- `db.py`: environment configuration, MySQL connection, and count query.
-- `templates/`: shared layout and dashboard HTML.
+- `app.py`: dashboard and Movies routes, movie validation, and `check-db` command.
+- `db.py`: environment configuration, MySQL connection, counts, and movie queries.
+- `templates/`: shared layout, dashboard, and movie list/add/edit/delete pages.
+- `tests/test_movies.py`: automated checks that do not connect to MySQL.
 - `static/`: custom CSS and local Bootstrap 5.3.8 CSS.
 - `.env.example`: connection settings template.
 - `dbms.sql`: original project file, unchanged and never executed by the app.
@@ -40,8 +41,8 @@ The `.env` file is excluded from Git. Exported environment variables take
 priority over `.env` values. Restart Flask after changing connection settings.
 
 The application connects to an existing database only. It does not create,
-import, reset, seed, or modify any database objects or records. Do not rerun
-`dbms.sql` as part of application setup.
+import, reset, seed, or change the schema. Movie records change only when you
+submit an add, edit, or delete form. Do not rerun `dbms.sql` during setup.
 
 ## Test the database connection
 
@@ -74,6 +75,33 @@ all booking statuses. A real zero is displayed as `0`. If configuration or a
 database read fails, the page displays an explanation and unavailable markers
 instead of fabricated counts, and returns HTTP 503.
 
+## Movies management
+
+Open http://127.0.0.1:5000/movies or choose Movies in the sidebar.
+
+- View all six Movie fields and search by a partial movie name.
+- Add Movie opens a form; Edit opens the existing movie's details.
+- Movie IDs are unique, 1–10 letters/numbers/hyphens/underscores, and cannot
+  be changed when editing. Name, genre, and language are required and respect
+  their existing column lengths.
+- Duration must be a positive integer. Rating must be 0–9.9 with at most
+  one decimal place, because the existing column is `DECIMAL(2,1)`.
+- Delete opens a confirmation page. Only submitting that form deletes a row.
+  If an existing show references the movie, MySQL blocks deletion and the page
+  explains why. No show or booking is deleted automatically.
+- Database failures and duplicate IDs display messages without exposing credentials.
+
+Movie forms include a session token to prevent unwanted cross-site submissions.
+The app generates a secret key for each run. An optional `SECRET_KEY` environment
+variable can keep sessions stable across restarts. If a form expires after a
+restart, reload it before submitting again.
+
+Run the automated checks (no database changes):
+
+```sh
+python -m unittest discover -s tests -v
+```
+
 ## Connection troubleshooting
 
 - **Missing DB_USER:** create `.env` from `.env.example` and fill in your login.
@@ -91,7 +119,8 @@ runs one `SELECT` containing four `COUNT(*)` subqueries, returns a dictionary,
 and closes the cursor and connection. Jinja renders the results into HTML.
 Bootstrap is stored locally, so styling works without internet access.
 
-The current query is fixed SQL with no input values. When forms are added,
-their values will be passed separately using Connector/Python `%s` parameters,
-never string concatenation. Existing report queries and booking triggers will
-be integrated in later increments; this dashboard does not fire any triggers.
+The dashboard query is fixed SQL with no input values. Movie form and search
+values are passed separately using Connector/Python `%s` parameters, never
+inserted into the SQL text. Each movie write commits on success and rolls back
+on a database error. Cursors and connections are closed after use. Existing
+report queries and booking workflows remain for later increments.
