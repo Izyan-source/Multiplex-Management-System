@@ -496,3 +496,103 @@ def update_booking_status(booking_id, new_status):
         except (Error, BookingRuleError):
             connection.rollback()
             raise
+
+
+class PaymentRuleError(ValueError):
+    """A payment edit would conflict with an existing confirmed booking."""
+
+
+def get_payments(search=""):
+    """One row per payment/booking association; include unlinked payments too."""
+    pattern = '%' + search.replace('!', '!!').replace('%', '!%').replace('_', '!_') + '%'
+    with get_connection() as connection:
+        with connection.cursor(dictionary=True) as cursor:
+            cursor.execute("""
+                SELECT p.Payment_ID, p.Amount, p.Payment_Mode, p.Payment_Date,
+                       p.Payment_Status, b.Booking_ID, c.Customer_Name
+                FROM Payment AS p
+                LEFT JOIN Booking AS b ON b.Payment_ID = p.Payment_ID
+                LEFT JOIN Customer AS c ON c.Customer_ID = b.Customer_ID
+                WHERE %s = '' OR p.Payment_ID LIKE %s ESCAPE '!'
+                    OR b.Booking_ID LIKE %s ESCAPE '!'
+                    OR c.Customer_Name LIKE %s ESCAPE '!'
+                ORDER BY p.Payment_Date DESC, p.Payment_ID, b.Booking_ID
+            """, (search, pattern, pattern, pattern))
+            return cursor.fetchall()
+
+
+def get_payment(payment_id):
+    with get_connection() as connection:
+        with connection.cursor(dictionary=True) as cursor:
+            cursor.execute("SELECT * FROM Payment WHERE Payment_ID = %s", (payment_id,))
+            return cursor.fetchone()
+
+
+def get_payment_bookings(payment_id):
+    with get_connection() as connection:
+        with connection.cursor(dictionary=True) as cursor:
+            cursor.execute(BOOKING_SELECT + " WHERE b.Payment_ID = %s ORDER BY b.Booking_ID", (payment_id,))
+            return cursor.fetchall()
+
+
+def add_payment(payment):
+    with get_connection() as connection:
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute("""
+                    INSERT INTO Payment (Payment_ID, Amount, Payment_Mode, Payment_Date, Payment_Status)
+                    VALUES (%s, %s, %s, %s, %s)
+                """, (payment['Payment_ID'], payment['Amount'], payment['Payment_Mode'],
+                      payment['Payment_Date'], payment['Payment_Status']))
+            connection.commit()
+        except Error:
+            connection.rollback()
+            raise
+
+
+def update_payment(payment_id, payment):
+    """Changing a record never confirms a booking or processes real money."""
+    with get_connection() as connection:
+        try:
+            connection.start_transaction(isolation_level='READ COMMITTED')
+            with connection.cursor(dictionary=True) as cursor:
+                # Booking confirmation already locks this payment until commit.
+                # Taking the same lock prevents a concurrent unpaid confirmation.
+                cursor.execute("SELECT Payment_ID FROM Payment WHERE Payment_ID = %s FOR UPDATE", (payment_id,))
+                if cursor.fetchone() is None:
+                    connection.rollback()
+                    return False
+                if payment['Payment_Status'] != 'Paid':
+                    # Read committed rows without locking Booking: confirmation
+                    # may hold a booking lock while waiting for our payment lock.
+                    cursor.execute("""
+                        SELECT Booking_ID FROM Booking
+                        WHERE Payment_ID = %s AND Booking_Status = 'Confirmed' LIMIT 1
+                    """, (payment_id,))
+                    if cursor.fetchone() is not None:
+                        raise PaymentRuleError('This payment must remain Paid because it is linked to a confirmed booking. No changes were saved.')
+                cursor.execute("""
+                    UPDATE Payment SET Amount = %s, Payment_Mode = %s,
+                        Payment_Date = %s, Payment_Status = %s
+                    WHERE Payment_ID = %s
+                """, (payment['Amount'], payment['Payment_Mode'], payment['Payment_Date'],
+                      payment['Payment_Status'], payment_id))
+            connection.commit()
+            return True
+        except (Error, PaymentRuleError):
+            connection.rollback()
+            raise
+
+
+def delete_payment(payment_id):
+    """MySQL blocks deletion if any booking, including cancelled, references it."""
+    with get_connection() as connection:
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute("DELETE FROM Payment WHERE Payment_ID = %s", (payment_id,))
+                deleted = cursor.rowcount > 0
+            connection.commit()
+            return deleted
+        except Error:
+            connection.rollback()
+            raise

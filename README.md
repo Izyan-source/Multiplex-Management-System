@@ -2,15 +2,15 @@
 
 A simple Flask interface for the existing MySQL `MultiplexDB` database.
 The application contains the dashboard, four live record counts, Movies,
-Customers, Shows and Bookings management, and a read-only connection check. Other navigation sections remain
-disabled until their pages are built.
+Customers, Shows, Bookings and Payments management, and a read-only connection check.
+Food Orders remains disabled until its page is built.
 
 ## Files
 
 - `app.py`: dashboard, management routes, validation, and `check-db` command.
 - `db.py`: environment configuration, connection, counts, and parameterized management queries.
-- `templates/`: shared layout, dashboard, movie/customer/show pages, and booking list/create/details pages.
-- `tests/test_movies.py`, `tests/test_customers.py`, `tests/test_shows.py`, `tests/test_bookings.py`: automated checks that do not connect to MySQL.
+- `templates/`: shared layout, dashboard, movie/customer/show pages, booking pages, and payment list/form/details/delete pages.
+- `tests/test_movies.py`, `tests/test_customers.py`, `tests/test_shows.py`, `tests/test_bookings.py`, `tests/test_payments.py`: automated checks that do not connect to MySQL.
 - `static/`: custom CSS and local Bootstrap 5.3.8 CSS.
 - `.env.example`: connection settings template.
 - `dbms.sql`: original project file, unchanged and never executed by the app.
@@ -43,7 +43,8 @@ priority over `.env` values. Restart Flask after changing connection settings.
 The application connects to an existing database only. It does not create,
 import, reset, seed, or change the schema. Movie, customer and show records change only when you
 submit an add, edit, or delete form. Booking forms create reservations or change
-their status; bookings have no delete action. Do not rerun `dbms.sql` during setup.
+their status; bookings have no delete action. Payment forms maintain records only;
+they do not process money. Do not rerun `dbms.sql` during setup.
 
 ## Test the database connection
 
@@ -211,11 +212,12 @@ The concurrency protection assumes booking writes use the app's locking
 sequence; arbitrary external SQL still has the original schema's limitations.
 Shows management still permits editing a booked show's screen, so keep that
 screen consistent with existing reservations; mismatched seats cannot be
-confirmed through this module. No payment gateway or payment editing is added.
+confirmed through this module. Payment records can now be edited in Payments;
+there is no payment gateway.
 
 ### Booking test results
 
-All 63 automated tests passed: 19 booking tests and all 44 existing tests.
+At the Bookings increment, all 63 automated tests passed: 19 booking tests and all 44 existing tests.
 Run them with `python -m unittest discover -s tests -v`.
 
 Separate live MySQL checks passed for joined listings/details, both searches,
@@ -226,6 +228,57 @@ the existing payment and duplicate triggers; confirmation/cancellation verified
 the seat-status trigger. Two simultaneous same-show/seat requests produced
 exactly one successful booking. Temporary records were removed, and snapshots
 of every row in all ten tables matched before and after the checks.
+
+## Payments management
+
+Open http://127.0.0.1:5000/payments or choose Payments in the sidebar.
+
+- The list uses `LEFT JOIN`s from Payment to Booking and Customer, including
+  payments with no booking. Search by part of a Payment ID, Booking ID or
+  customer name. Search characters such as `%` and `_` are treated literally.
+- The schema permits multiple bookings to share a payment. Each association
+  appears as a separate list row, so repeated amounts must not be summed as
+  independent payments. View opens payment details and all associated bookings,
+  with links to the existing booking details/status workflow.
+- Record Payment creates a database record. IDs must be unique and contain
+  1–10 letters, numbers, hyphens or underscores. They cannot be changed by editing.
+- Amount must be 0.01–999999.99 with at most two decimal places. Modes are UPI,
+  Card, Cash and Net Banking. Status is Paid or Pending. Dates must be valid
+  calendar dates from 1000-01-01 to 9999-12-31; historical dates are allowed.
+- Edit Payment updates its amount, mode, date and status. Marking it Paid does
+  not confirm any booking. Open the associated pending booking and confirm it
+  using the existing workflow. The existing `check_payment` trigger remains
+  installed and unchanged and still rejects unpaid booking confirmation.
+- A payment linked to any Confirmed booking cannot be set to Pending. The
+  entire edit is rejected, including simultaneous changes to amount or mode.
+  The check locks the payment row in a READ COMMITTED transaction, coordinating
+  with the existing booking confirmation lock. No changes to booking code are
+  needed. A concurrent confirmation and downgrade cannot both succeed through
+  these application workflows.
+- Delete opens a confirmation page. Only POST deletes a record. MySQL blocks
+  deletion if any booking references the payment, including cancelled bookings.
+  Errors roll back the operation and show a meaningful message.
+- These pages record information only: they do not collect money, charge a
+  card, verify a bank payment, transfer funds or issue refunds.
+
+All 86 automated tests passed: 23 Payment tests plus the existing 63 tests.
+Run `python -m unittest discover -s tests -v` to repeat these mocked checks;
+they do not connect to or change MySQL.
+
+Separate live MySQL checks passed for joined listings/details, all three search
+fields, creation, edits, status changes, duplicate IDs, invalid values, deleting
+unreferenced records, and blocking deletion of referenced records. Checks also
+covered shared payments, the confirmed-booking downgrade guard, manual booking
+confirmation after marking Paid, the existing `check_payment` trigger directly,
+and a simultaneous confirmation/downgrade. All temporary records were removed;
+every original row in all ten tables and all trigger definitions matched the
+pre-test snapshot. Browser checks verified the list, details and edit form.
+
+Remaining schema limitations: payment amounts are not reconciled automatically
+against linked booking totals, shared payments remain permitted, and edits do
+not have a separate audit-history table. The downgrade guard protects writes
+through this application; direct external SQL still has the original schema's
+limitations. No tables or triggers were created or changed.
 
 ## Connection troubleshooting
 
@@ -248,4 +301,4 @@ The dashboard query is fixed SQL with no input values. Management form and searc
 values are passed separately using Connector/Python `%s` parameters, never
 inserted into the SQL text. Each write commits on success and rolls back
 on a database error. Cursors and connections are closed after use. Existing
-report queries, Payments and Food Orders pages remain for later increments.
+report queries and the Food Orders page remain for later increments.

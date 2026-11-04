@@ -17,6 +17,8 @@ from db import (
     add_show, delete_show, get_show, get_shows, get_screens, update_show,
     BookingRuleError, add_booking, get_booking, get_bookings, get_booking_payments,
     get_available_seats, update_booking_status,
+    PaymentRuleError, get_payments, get_payment, get_payment_bookings,
+    add_payment, update_payment, delete_payment,
 )
 
 
@@ -42,6 +44,7 @@ def protect_movie_forms():
         "customer_add", "customer_edit", "customer_delete",
         "show_add", "show_edit", "show_delete",
         "booking_add", "booking_status",
+        "payment_add", "payment_edit", "payment_delete",
     }:
         expected = session.get("csrf_token", "")
         submitted = request.form.get("csrf_token", "")
@@ -580,6 +583,149 @@ def booking_status(booking_id):
         abort(404, description='Booking not found.')
     flash(f'Booking status changed to {new_status}.', 'success')
     return redirect(url_for('booking_detail', booking_id=booking_id))
+
+
+PAYMENT_MODES = ('UPI', 'Card', 'Cash', 'Net Banking')
+PAYMENT_STATUSES = ('Paid', 'Pending')
+
+
+def validate_payment(form, payment_id=None):
+    payment = {key: form.get(key, '').strip() for key in (
+        'Payment_ID', 'Amount', 'Payment_Mode', 'Payment_Date', 'Payment_Status'
+    )}
+    errors = []
+    if payment_id is not None:
+        payment['Payment_ID'] = payment_id
+    elif not re.fullmatch(r'[A-Za-z0-9_-]{1,10}', payment['Payment_ID']):
+        errors.append('Payment ID must contain 1–10 letters, numbers, hyphens, or underscores.')
+    amount = payment['Amount']
+    if not re.fullmatch(r'[0-9]{1,6}(?:\.[0-9]{1,2})?', amount) or Decimal(amount) <= 0:
+        errors.append('Amount must be between 0.01 and 999999.99, with at most two decimal places.')
+    else:
+        payment['Amount'] = Decimal(amount)
+    if payment['Payment_Mode'] not in PAYMENT_MODES:
+        errors.append('Choose UPI, Card, Cash, or Net Banking for payment mode.')
+    if payment['Payment_Status'] not in PAYMENT_STATUSES:
+        errors.append('Choose Paid or Pending for payment status.')
+    try:
+        if not re.fullmatch(r'[0-9]{4}-[0-9]{2}-[0-9]{2}', payment['Payment_Date']):
+            raise ValueError
+        if date.fromisoformat(payment['Payment_Date']).year < 1000:
+            raise ValueError
+    except ValueError:
+        errors.append('Enter a valid payment date between 1000-01-01 and 9999-12-31.')
+    return payment, errors
+
+
+def payment_error_message(error):
+    if isinstance(error, PaymentRuleError):
+        return str(error)
+    if isinstance(error, ValueError):
+        return database_error_message(error)
+    if error.errno == 1062:
+        return 'That Payment ID already exists. Please choose a different ID.'
+    if error.errno == 1451:
+        return 'This payment cannot be deleted because existing bookings reference it, including cancelled bookings. No records were changed.'
+    if error.errno in (1205, 1213):
+        return 'Another operation is using this payment. No changes were saved; reload and try again.'
+    if error.errno in (1045, 1698, 1049, 1044, 1142, 2002, 2003, 2005):
+        return database_error_message(error)
+    return 'The payment operation could not be completed. Check the database connection and try again.'
+
+
+@app.route('/payments')
+def payments():
+    search = request.args.get('q', '').strip()
+    try:
+        records = get_payments(search)
+    except (Error, ValueError) as error:
+        return render_template('payments/list.html', payments=None, search=search,
+                               error=payment_error_message(error)), 503
+    return render_template('payments/list.html', payments=records, search=search, error=None)
+
+
+@app.route('/payments/add', methods=['GET', 'POST'])
+def payment_add():
+    payment, errors, status = {'Payment_Status': 'Pending'}, [], 200
+    if request.method == 'POST':
+        payment, errors = validate_payment(request.form)
+        status = 400
+        if not errors:
+            try:
+                add_payment(payment)
+            except (Error, ValueError) as error:
+                errors = [payment_error_message(error)]
+                status = 409 if getattr(error, 'errno', None) == 1062 else 503
+            else:
+                flash('Payment record added successfully.', 'success')
+                return redirect(url_for('payment_detail', payment_id=payment['Payment_ID']))
+    return render_template('payments/form.html', payment=payment, editing=False,
+                           errors=errors, modes=PAYMENT_MODES, statuses=PAYMENT_STATUSES), status
+
+
+@app.route('/payments/<payment_id>')
+def payment_detail(payment_id):
+    try:
+        payment = get_payment(payment_id)
+        if payment is None:
+            abort(404, description='Payment not found.')
+        linked_bookings = get_payment_bookings(payment_id)
+    except (Error, ValueError) as error:
+        return render_template('payments/list.html', payments=None, search='',
+                               error=payment_error_message(error)), 503
+    return render_template('payments/detail.html', payment=payment, bookings=linked_bookings)
+
+
+@app.route('/payments/<payment_id>/edit', methods=['GET', 'POST'])
+def payment_edit(payment_id):
+    try:
+        payment = get_payment(payment_id)
+    except (Error, ValueError) as error:
+        return render_template('payments/list.html', payments=None, search='',
+                               error=payment_error_message(error)), 503
+    if payment is None:
+        abort(404, description='Payment not found.')
+    errors, status = [], 200
+    if request.method == 'POST':
+        payment, errors = validate_payment(request.form, payment_id)
+        status = 400
+        if not errors:
+            try:
+                exists = update_payment(payment_id, payment)
+            except (Error, ValueError) as error:
+                errors = [payment_error_message(error)]
+                status = 409 if isinstance(error, PaymentRuleError) or getattr(error, 'errno', None) in (1205, 1213) else 503
+            else:
+                if not exists:
+                    abort(404, description='Payment not found.')
+                flash('Payment record updated. Booking statuses are unchanged.', 'success')
+                return redirect(url_for('payment_detail', payment_id=payment_id))
+    return render_template('payments/form.html', payment=payment, editing=True,
+                           errors=errors, modes=PAYMENT_MODES, statuses=PAYMENT_STATUSES), status
+
+
+@app.route('/payments/<payment_id>/delete', methods=['GET', 'POST'])
+def payment_delete(payment_id):
+    try:
+        payment = get_payment(payment_id)
+    except (Error, ValueError) as error:
+        return render_template('payments/list.html', payments=None, search='',
+                               error=payment_error_message(error)), 503
+    if payment is None:
+        abort(404, description='Payment not found.')
+    error_message, status = None, 200
+    if request.method == 'POST':
+        try:
+            deleted = delete_payment(payment_id)
+        except (Error, ValueError) as error:
+            error_message = payment_error_message(error)
+            status = 409 if getattr(error, 'errno', None) in (1451, 1205, 1213) else 503
+        else:
+            if not deleted:
+                abort(404, description='Payment not found.')
+            flash('Payment record deleted.', 'success')
+            return redirect(url_for('payments'))
+    return render_template('payments/delete.html', payment=payment, error=error_message), status
 
 
 @app.route("/")

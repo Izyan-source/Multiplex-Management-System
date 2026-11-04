@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+{% block title %}Payment {{ payment.Payment_ID }}{% endblock %}
+{% block content %}
+<header class="page-header">
+    <div><p class="eyebrow">PAYMENT RECORDS</p><h1>Payment {{ payment.Payment_ID }}</h1>
+        <p class="text-secondary mb-0">Recorded details and associated bookings. No money is processed here.</p></div>
+    <a class="btn btn-outline-secondary" href="{{ url_for('payments') }}">Back to Payments</a>
+</header>
+{% for category, message in get_flashed_messages(with_categories=true) %}<div class="alert alert-{{ category }}" role="status">{{ message }}</div>{% endfor %}
+<section class="card overview-panel mb-4"><div class="card-body">
+    <h2 class="h5 mb-4">Payment details</h2>
+    <dl class="row">
+        {% for label, key in [('Payment ID', 'Payment_ID'), ('Amount', 'Amount'), ('Payment Mode', 'Payment_Mode'), ('Payment Date', 'Payment_Date'), ('Payment Status', 'Payment_Status')] %}
+        <dt class="col-sm-4 text-secondary fw-normal">{{ label }}</dt>
+        <dd class="col-sm-8 text-break">{% if payment[key] is none %}—{% elif key == 'Amount' %}{{ '%.2f'|format(payment[key]) }}{% else %}{{ payment[key] }}{% endif %}</dd>
+        {% endfor %}
+    </dl>
+    <a class="btn btn-primary movie-primary" href="{{ url_for('payment_edit', payment_id=payment.Payment_ID) }}">Edit Payment</a>
+    <a class="btn btn-outline-danger" href="{{ url_for('payment_delete', payment_id=payment.Payment_ID) }}">Delete Payment</a>
+</div></section>
+<section class="card overview-panel"><div class="card-body">
+    <h2 class="h5">Associated bookings</h2>
+    <p class="text-secondary">Payment changes do not confirm bookings automatically. Open a pending booking to confirm it after its payment is Paid.</p>
+    <div class="table-responsive"><table class="table align-middle movie-table">
+        <thead><tr>{% for label in ['Booking ID', 'Customer Name', 'Movie Name', 'Show Date', 'Show Time', 'Seat Number', 'Booking Date', 'Booking Time', 'Total Amount', 'Booking Status', 'Details'] %}<th scope="col">{{ label }}</th>{% endfor %}</tr></thead>
+        <tbody>{% for booking in bookings %}<tr>
+            <td>{{ booking.Booking_ID }}</td><td>{{ booking.Customer_Name or '—' }}</td><td>{{ booking.Movie_Name or '—' }}</td>
+            <td class="text-nowrap">{{ booking.Show_Date or '—' }}</td><td>{{ booking.Show_Time or '—' }}</td><td>{{ booking.Seat_Number or '—' }}</td>
+            <td class="text-nowrap">{{ booking.Booking_Date or '—' }}</td><td>{{ booking.Booking_Time or '—' }}</td>
+            <td>{{ '%.2f'|format(booking.Total_Amount) if booking.Total_Amount is not none else '—' }}</td><td>{{ booking.Booking_Status or '—' }}</td>
+            <td><a class="btn btn-sm btn-outline-secondary text-nowrap" href="{{ url_for('booking_detail', booking_id=booking.Booking_ID) }}" aria-label="Open booking {{ booking.Booking_ID }}">Open Booking</a></td>
+        </tr>{% else %}<tr><td colspan="11" class="text-secondary py-4">No bookings are linked to this payment. Select this payment when creating a booking.</td></tr>{% endfor %}</tbody>
+    </table></div>
+</div></section>
+{% endblock %}
