@@ -1,0 +1,58 @@
+{% extends 'base.html' %}
+{% block title %}Customers{% endblock %}
+{% block content %}
+<header class="page-header">
+    <div>
+        <p class="eyebrow">CUSTOMERS</p>
+        <h1>Customers</h1>
+        <p class="text-secondary mb-0">Browse and manage your customer directory.</p>
+    </div>
+    <a class="btn btn-primary movie-primary" href="{{ url_for('customer_add') }}">Register Customer</a>
+</header>
+{% for category, message in get_flashed_messages(with_categories=true) %}
+<div class="alert alert-{{ category }}" role="status">{{ message }}</div>
+{% endfor %}
+{% if error %}<div class="alert alert-warning" role="alert">{{ error }}</div>{% endif %}
+<section class="card overview-panel" aria-label="Customer directory">
+    <div class="card-body">
+        <form method="get" action="{{ url_for('customers') }}" class="row g-2 align-items-end mb-4" role="search">
+            <div class="col-12 col-md-7 col-lg-6">
+                <label class="form-label" for="customer-search">Search by customer name</label>
+                <input class="form-control" type="search" id="customer-search" name="q" value="{{ search }}" placeholder="Enter a customer name">
+            </div>
+            <div class="col-auto"><button class="btn btn-primary movie-primary" type="submit">Search</button></div>
+            {% if search %}<div class="col-auto"><a class="btn btn-outline-secondary" href="{{ url_for('customers') }}">Clear</a></div>{% endif %}
+        </form>
+        {% if customers is not none %}
+        <div class="table-responsive">
+            <table class="table align-middle movie-table">
+                <caption>{{ customers|length }} customer{% if customers|length != 1 %}s{% endif %}{% if search %} matching your search{% endif %}</caption>
+                <thead><tr>
+                    <th scope="col">Customer ID</th><th scope="col">Customer Name</th>
+                    <th scope="col">Phone</th><th scope="col">Email</th>
+                    <th scope="col">Gender</th>
+                    <th scope="col" class="text-end">Actions</th>
+                </tr></thead>
+                <tbody>
+                {% for customer in customers %}
+                <tr>
+                    <td class="text-nowrap">{{ customer.Customer_ID }}</td>
+                    <td class="fw-semibold">{{ customer.Customer_Name if customer.Customer_Name is not none else '—' }}</td>
+                    <td class="text-nowrap">{{ customer.Phone if customer.Phone is not none else '—' }}</td>
+                    <td class="text-break">{{ customer.Email if customer.Email is not none else '—' }}</td>
+                    <td>{{ customer.Gender if customer.Gender is not none else '—' }}</td>
+                    <td class="text-end text-nowrap">
+                        <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('customer_edit', customer_id=customer.Customer_ID) }}" aria-label="Edit {{ customer.Customer_Name or customer.Customer_ID }}">Edit</a>
+                        <a class="btn btn-sm btn-outline-danger ms-1" href="{{ url_for('customer_delete', customer_id=customer.Customer_ID) }}" aria-label="Delete {{ customer.Customer_Name or customer.Customer_ID }}">Delete</a>
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="6" class="text-center text-secondary py-5">{% if search %}No customers match your search.{% else %}No customers yet. Use Register Customer to create your first record.{% endif %}</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}

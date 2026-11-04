@@ -1,0 +1,61 @@
+{% extends 'base.html' %}
+{% block title %}{{ 'Edit Customer' if editing else 'Register Customer' }}{% endblock %}
+{% block content %}
+<header class="page-header">
+    <div>
+        <p class="eyebrow">CUSTOMERS</p>
+        <h1>{{ 'Edit Customer' if editing else 'Register Customer' }}</h1>
+        <p class="text-secondary mb-0">Enter the customer details below. All fields are required.</p>
+    </div>
+    <a class="btn btn-outline-secondary" href="{{ url_for('customers') }}">Back to Customers</a>
+</header>
+{% if errors %}
+<div class="alert alert-danger" role="alert">
+    <p class="fw-semibold mb-2">Please check the following:</p>
+    <ul class="mb-0">{% for error in errors %}<li>{{ error }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
+<section class="card overview-panel movie-form">
+    <div class="card-body">
+        <form method="post" action="{{ url_for('customer_edit', customer_id=customer.Customer_ID) if editing else url_for('customer_add') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label" for="Customer_ID">Customer ID</label>
+                    <input class="form-control" id="Customer_ID" name="Customer_ID" value="{{ customer.get('Customer_ID') or '' }}" maxlength="10" required {% if editing %}readonly{% else %}pattern="[A-Za-z0-9_\-]{1,10}"{% endif %} aria-describedby="id-help">
+                    <div class="form-text" id="id-help">{% if editing %}Customer IDs cannot be changed.{% else %}Up to 10 letters, numbers, hyphens, or underscores.{% endif %}</div>
+                </div>
+                <div class="col-md-8">
+                    <label class="form-label" for="Customer_Name">Customer Name</label>
+                    <input class="form-control" id="Customer_Name" name="Customer_Name" value="{{ customer.get('Customer_Name') or '' }}" maxlength="100" autocomplete="name" required>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label" for="Phone">Phone</label>
+                    <input class="form-control" type="tel" id="Phone" name="Phone" value="{{ customer.get('Phone') or '' }}" maxlength="15" pattern="\+?[0-9]{7,15}" autocomplete="tel" required aria-describedby="phone-help">
+                    <div class="form-text" id="phone-help">7–15 digits, optional leading +; maximum 15 characters total. No spaces or dashes.</div>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label" for="Email">Email</label>
+                    <input class="form-control" type="email" id="Email" name="Email" value="{{ customer.get('Email') or '' }}" maxlength="100" autocomplete="email" required>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label" for="Gender">Gender</label>
+                    <select class="form-select" id="Gender" name="Gender" required>
+                        <option value="">Select gender</option>
+                        {% if customer.get('Gender') and customer.Gender not in genders %}
+                        <option value="{{ customer.Gender }}" selected disabled>{{ customer.Gender }} — choose a supported value</option>
+                        {% endif %}
+                        {% for gender in genders %}
+                        <option value="{{ gender }}"{% if customer.get('Gender') == gender %} selected{% endif %}>{{ gender }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div class="d-flex gap-2 mt-4">
+                <button class="btn btn-primary movie-primary" type="submit">{{ 'Save Changes' if editing else 'Register Customer' }}</button>
+                <a class="btn btn-outline-secondary" href="{{ url_for('customers') }}">Cancel</a>
+            </div>
+        </form>
+    </div>
+</section>
+{% endblock %}

@@ -1,16 +1,16 @@
 # Multiplex Management System
 
 A simple Flask interface for the existing MySQL `MultiplexDB` database.
-The application contains the dashboard, four live record counts, Movies
-management, and a read-only connection check. Other navigation sections remain
+The application contains the dashboard, four live record counts, Movies and
+Customers management, and a read-only connection check. Other navigation sections remain
 disabled until their pages are built.
 
 ## Files
 
-- `app.py`: dashboard and Movies routes, movie validation, and `check-db` command.
-- `db.py`: environment configuration, MySQL connection, counts, and movie queries.
-- `templates/`: shared layout, dashboard, and movie list/add/edit/delete pages.
-- `tests/test_movies.py`: automated checks that do not connect to MySQL.
+- `app.py`: dashboard, Movies and Customers routes, input validation, and `check-db` command.
+- `db.py`: environment configuration, connection, counts, and movie/customer queries.
+- `templates/`: shared layout, dashboard, and movie/customer list/add/edit/delete pages.
+- `tests/test_movies.py` and `tests/test_customers.py`: automated checks that do not connect to MySQL.
 - `static/`: custom CSS and local Bootstrap 5.3.8 CSS.
 - `.env.example`: connection settings template.
 - `dbms.sql`: original project file, unchanged and never executed by the app.
@@ -41,7 +41,7 @@ The `.env` file is excluded from Git. Exported environment variables take
 priority over `.env` values. Restart Flask after changing connection settings.
 
 The application connects to an existing database only. It does not create,
-import, reset, seed, or change the schema. Movie records change only when you
+import, reset, seed, or change the schema. Movie and customer records change only when you
 submit an add, edit, or delete form. Do not rerun `dbms.sql` during setup.
 
 ## Test the database connection
@@ -91,7 +91,7 @@ Open http://127.0.0.1:5000/movies or choose Movies in the sidebar.
   explains why. No show or booking is deleted automatically.
 - Database failures and duplicate IDs display messages without exposing credentials.
 
-Movie forms include a session token to prevent unwanted cross-site submissions.
+Movie and customer forms include a session token to prevent unwanted cross-site submissions.
 The app generates a secret key for each run. An optional `SECRET_KEY` environment
 variable can keep sessions stable across restarts. If a form expires after a
 restart, reload it before submitting again.
@@ -101,6 +101,37 @@ Run the automated checks (no database changes):
 ```sh
 python -m unittest discover -s tests -v
 ```
+
+## Customers management
+
+Open http://127.0.0.1:5000/customers or choose Customers in the sidebar.
+
+- View Customer ID, name, phone, email, and gender. Search matches part of a
+  customer name; apostrophes, `%`, and `_` are treated as literal search text.
+- Register Customer opens a form. Edit uses the same form with existing values.
+  Customer IDs must be unique and contain 1–10 letters, numbers, hyphens, or
+  underscores. IDs cannot be changed when editing.
+- Name is required, must contain a letter, and allows up to 100 characters.
+  Unicode names, apostrophes, and hyphens are supported.
+- Phone is stored as text to preserve leading zeros. Enter 7–15 digits with
+  an optional leading `+`, within the existing 15-character column limit.
+  Thus a number with `+` can have at most 14 digits. Spaces and dashes are not
+  accepted; no country-specific validation or phone verification is performed.
+- Email is required, limited to 100 characters, and checked for common email
+  syntax. This checks formatting, not whether a mailbox exists.
+- Gender choices are Male, Female, Other, and Not stated. All fit the existing
+  `VARCHAR(10)` column. Existing records are displayed as stored.
+- Delete opens a confirmation page. MySQL rejects deletion if any booking,
+  including a cancelled booking, references the customer. The page explains
+  the restriction; bookings are never deleted automatically.
+- Duplicate IDs and validation failures keep submitted form values so they
+  can be corrected. Database errors do not display passwords or raw SQL errors.
+
+The initial implementation passed 14 customer tests and all 12 existing movie
+tests. Live checks exercised registration, search, editing, duplicate IDs,
+invalid input, deletion, and a real booking foreign-key rejection through the
+Flask route. The temporary customer was removed and the temporary booking was
+rolled back; original customer, movie, and booking records were unchanged.
 
 ## Connection troubleshooting
 
@@ -119,8 +150,8 @@ runs one `SELECT` containing four `COUNT(*)` subqueries, returns a dictionary,
 and closes the cursor and connection. Jinja renders the results into HTML.
 Bootstrap is stored locally, so styling works without internet access.
 
-The dashboard query is fixed SQL with no input values. Movie form and search
+The dashboard query is fixed SQL with no input values. Movie/customer form and search
 values are passed separately using Connector/Python `%s` parameters, never
-inserted into the SQL text. Each movie write commits on success and rolls back
+inserted into the SQL text. Each movie/customer write commits on success and rolls back
 on a database error. Cursors and connections are closed after use. Existing
 report queries and booking workflows remain for later increments.

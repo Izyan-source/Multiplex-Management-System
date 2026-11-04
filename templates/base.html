@@ -19,7 +19,8 @@
             <nav class="nav flex-column gap-2" aria-label="Main navigation">
                 <a class="nav-link{% if request.endpoint == 'dashboard' %} active{% endif %}" href="{{ url_for('dashboard') }}"{% if request.endpoint == 'dashboard' %} aria-current="page"{% endif %}>Dashboard</a>
                 <a class="nav-link{% if request.endpoint in ['movies', 'movie_add', 'movie_edit', 'movie_delete'] %} active{% endif %}" href="{{ url_for('movies') }}"{% if request.endpoint in ['movies', 'movie_add', 'movie_edit', 'movie_delete'] %} aria-current="page"{% endif %}>Movies</a>
-                {% for label in ['Customers', 'Shows', 'Bookings', 'Payments', 'Food Orders'] %}
+                <a class="nav-link{% if request.endpoint in ['customers', 'customer_add', 'customer_edit', 'customer_delete'] %} active{% endif %}" href="{{ url_for('customers') }}"{% if request.endpoint in ['customers', 'customer_add', 'customer_edit', 'customer_delete'] %} aria-current="page"{% endif %}>Customers</a>
+                {% for label in ['Shows', 'Bookings', 'Payments', 'Food Orders'] %}
                 <span class="nav-link disabled" role="link" aria-disabled="true">
                     {{ label }}<span class="soon-label">Soon</span>
                 </span>

@@ -12,6 +12,7 @@ from mysql.connector import Error
 from db import (
     add_movie, database_error_message, delete_movie, get_dashboard_counts,
     get_movie, get_movies, update_movie,
+    add_customer, delete_customer, get_customer, get_customers, update_customer,
 )
 
 
@@ -32,7 +33,10 @@ app.jinja_env.globals["csrf_token"] = csrf_token
 
 @app.before_request
 def protect_movie_forms():
-    if request.method == "POST" and request.endpoint in {"movie_add", "movie_edit", "movie_delete"}:
+    if request.method == "POST" and request.endpoint in {
+        "movie_add", "movie_edit", "movie_delete",
+        "customer_add", "customer_edit", "customer_delete",
+    }:
         expected = session.get("csrf_token", "")
         submitted = request.form.get("csrf_token", "")
         if not expected or not secrets.compare_digest(expected.encode(), submitted.encode()):
@@ -157,6 +161,143 @@ def movie_delete(movie_id):
             flash("Movie deleted successfully.", "success")
             return redirect(url_for("movies"))
     return render_template("movies/delete.html", movie=movie, error=error_message), status
+
+
+CUSTOMER_GENDERS = ("Male", "Female", "Other", "Not stated")
+
+
+def valid_customer_email(email):
+    """Check common email syntax without contacting an email service."""
+    if len(email) > 100 or email.count("@") != 1:
+        return False
+    local, domain = email.split("@")
+    if not local or len(local) > 64 or local.startswith(".") or local.endswith(".") or ".." in local:
+        return False
+    if not re.fullmatch(r"[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+", local):
+        return False
+    labels = domain.split(".")
+    return len(labels) >= 2 and all(
+        len(label) <= 63 and re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?", label)
+        for label in labels
+    )
+
+
+def validate_customer(form, customer_id=None):
+    """Keep input within the existing Customer table's column limits."""
+    customer = {key: form.get(key, "").strip() for key in (
+        "Customer_ID", "Customer_Name", "Phone", "Email", "Gender"
+    )}
+    errors = []
+    if customer_id is not None:
+        customer["Customer_ID"] = customer_id
+    elif not re.fullmatch(r"[A-Za-z0-9_-]{1,10}", customer["Customer_ID"]):
+        errors.append("Customer ID must contain 1–10 letters, numbers, hyphens, or underscores.")
+    name = customer["Customer_Name"]
+    if (not name or len(name) > 100 or not any(char.isalpha() for char in name)
+            or any(ord(char) < 32 or ord(char) == 127 for char in name)):
+        errors.append("Name is required, must contain a letter, and must be at most 100 characters without control characters.")
+    phone = customer["Phone"]
+    if len(phone) > 15 or not re.fullmatch(r"\+?[0-9]{7,15}", phone):
+        errors.append("Phone must contain 7–15 digits, optionally starting with +, and be at most 15 characters in total. Do not include spaces or dashes.")
+    if not valid_customer_email(customer["Email"]):
+        errors.append("Enter a valid email address, such as name@example.com, with at most 100 characters.")
+    if customer["Gender"] not in CUSTOMER_GENDERS:
+        errors.append("Choose Male, Female, Other, or Not stated for gender.")
+    return customer, errors
+
+
+def customer_error_message(error):
+    if isinstance(error, ValueError):
+        return database_error_message(error)
+    if error.errno == 1062:
+        return "That Customer ID already exists. Please choose a different ID."
+    if error.errno == 1451:
+        return "This customer cannot be deleted because they have existing bookings. No records were changed."
+    if error.errno in (1045, 1698, 1049, 1044, 1142, 2002, 2003, 2005):
+        return database_error_message(error)
+    return "The customer operation could not be completed. Check the database connection and Customer table, then try again."
+
+
+@app.route("/customers")
+def customers():
+    search = request.args.get("q", "").strip()
+    try:
+        records = get_customers(search)
+    except (Error, ValueError) as error:
+        return render_template("customers/list.html", customers=None, search=search,
+                               error=customer_error_message(error)), 503
+    return render_template("customers/list.html", customers=records, search=search, error=None)
+
+
+@app.route("/customers/add", methods=["GET", "POST"])
+def customer_add():
+    customer, errors = {}, []
+    status = 200
+    if request.method == "POST":
+        customer, errors = validate_customer(request.form)
+        status = 400
+        if not errors:
+            try:
+                add_customer(customer)
+            except (Error, ValueError) as error:
+                errors = [customer_error_message(error)]
+                status = 409 if getattr(error, "errno", None) == 1062 else 503
+            else:
+                flash("Customer registered successfully.", "success")
+                return redirect(url_for("customers"))
+    return render_template("customers/form.html", customer=customer, editing=False,
+                           errors=errors, genders=CUSTOMER_GENDERS), status
+
+
+@app.route("/customers/<customer_id>/edit", methods=["GET", "POST"])
+def customer_edit(customer_id):
+    try:
+        customer = get_customer(customer_id)
+    except (Error, ValueError) as error:
+        return render_template("customers/list.html", customers=None, search="",
+                               error=customer_error_message(error)), 503
+    if customer is None:
+        abort(404, description="Customer not found.")
+    errors, status = [], 200
+    if request.method == "POST":
+        customer, errors = validate_customer(request.form, customer_id)
+        status = 400
+        if not errors:
+            try:
+                exists = update_customer(customer_id, customer)
+            except (Error, ValueError) as error:
+                errors, status = [customer_error_message(error)], 503
+            else:
+                if not exists:
+                    abort(404, description="Customer not found.")
+                flash("Customer updated successfully.", "success")
+                return redirect(url_for("customers"))
+    return render_template("customers/form.html", customer=customer, editing=True,
+                           errors=errors, genders=CUSTOMER_GENDERS), status
+
+
+@app.route("/customers/<customer_id>/delete", methods=["GET", "POST"])
+def customer_delete(customer_id):
+    try:
+        customer = get_customer(customer_id)
+    except (Error, ValueError) as error:
+        return render_template("customers/list.html", customers=None, search="",
+                               error=customer_error_message(error)), 503
+    if customer is None:
+        abort(404, description="Customer not found.")
+    error_message, status = None, 200
+    if request.method == "POST":
+        try:
+            deleted = delete_customer(customer_id)
+        except (Error, ValueError) as error:
+            error_message = customer_error_message(error)
+            status = 409 if getattr(error, "errno", None) == 1451 else 503
+        else:
+            if not deleted:
+                abort(404, description="Customer not found.")
+            flash("Customer deleted successfully.", "success")
+            return redirect(url_for("customers"))
+    return render_template("customers/delete.html", customer=customer, error=error_message), status
 
 
 @app.route("/")

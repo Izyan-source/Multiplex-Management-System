@@ -148,3 +148,76 @@ def delete_movie(movie_id):
         except Error:
             connection.rollback()
             raise
+
+
+def get_customers(search=""):
+    """Search names literally, including names containing % or _."""
+    pattern = "%" + search.replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%"
+    with get_connection() as connection:
+        with connection.cursor(dictionary=True) as cursor:
+            cursor.execute("""
+                SELECT Customer_ID, Customer_Name, Phone, Email, Gender
+                FROM Customer
+                WHERE %s = '' OR Customer_Name LIKE %s ESCAPE '!'
+                ORDER BY Customer_Name, Customer_ID
+            """, (search, pattern))
+            return cursor.fetchall()
+
+
+def get_customer(customer_id):
+    with get_connection() as connection:
+        with connection.cursor(dictionary=True) as cursor:
+            cursor.execute("""
+                SELECT Customer_ID, Customer_Name, Phone, Email, Gender
+                FROM Customer WHERE Customer_ID = %s
+            """, (customer_id,))
+            return cursor.fetchone()
+
+
+def add_customer(customer):
+    with get_connection() as connection:
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute("""
+                    INSERT INTO Customer
+                        (Customer_ID, Customer_Name, Phone, Email, Gender)
+                    VALUES (%s, %s, %s, %s, %s)
+                """, (customer["Customer_ID"], customer["Customer_Name"], customer["Phone"],
+                      customer["Email"], customer["Gender"]))
+            connection.commit()
+        except Error:
+            connection.rollback()
+            raise
+
+
+def update_customer(customer_id, customer):
+    """Return False if the customer was removed, but allow unchanged submissions."""
+    with get_connection() as connection:
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute("""
+                    UPDATE Customer SET Customer_Name = %s, Phone = %s, Email = %s, Gender = %s
+                    WHERE Customer_ID = %s
+                """, (customer["Customer_Name"], customer["Phone"], customer["Email"],
+                      customer["Gender"], customer_id))
+                cursor.execute("SELECT Customer_ID FROM Customer WHERE Customer_ID = %s", (customer_id,))
+                exists = cursor.fetchone() is not None
+            connection.commit()
+            return exists
+        except Error:
+            connection.rollback()
+            raise
+
+
+def delete_customer(customer_id):
+    """MySQL rejects deletion if a Booking still references this customer."""
+    with get_connection() as connection:
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute("DELETE FROM Customer WHERE Customer_ID = %s", (customer_id,))
+                deleted = cursor.rowcount > 0
+            connection.commit()
+            return deleted
+        except Error:
+            connection.rollback()
+            raise
