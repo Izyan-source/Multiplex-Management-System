@@ -2,15 +2,15 @@
 
 A simple Flask interface for the existing MySQL `MultiplexDB` database.
 The application contains the dashboard, four live record counts, Movies,
-Customers and Shows management, and a read-only connection check. Other navigation sections remain
+Customers, Shows and Bookings management, and a read-only connection check. Other navigation sections remain
 disabled until their pages are built.
 
 ## Files
 
-- `app.py`: dashboard, Movies, Customers and Shows routes, validation, and `check-db` command.
-- `db.py`: environment configuration, connection, counts, and movie/customer/show queries.
-- `templates/`: shared layout, dashboard, and movie/customer/show list/add/edit/delete pages.
-- `tests/test_movies.py`, `tests/test_customers.py`, `tests/test_shows.py`: automated checks that do not connect to MySQL.
+- `app.py`: dashboard, management routes, validation, and `check-db` command.
+- `db.py`: environment configuration, connection, counts, and parameterized management queries.
+- `templates/`: shared layout, dashboard, movie/customer/show pages, and booking list/create/details pages.
+- `tests/test_movies.py`, `tests/test_customers.py`, `tests/test_shows.py`, `tests/test_bookings.py`: automated checks that do not connect to MySQL.
 - `static/`: custom CSS and local Bootstrap 5.3.8 CSS.
 - `.env.example`: connection settings template.
 - `dbms.sql`: original project file, unchanged and never executed by the app.
@@ -42,7 +42,8 @@ priority over `.env` values. Restart Flask after changing connection settings.
 
 The application connects to an existing database only. It does not create,
 import, reset, seed, or change the schema. Movie, customer and show records change only when you
-submit an add, edit, or delete form. Do not rerun `dbms.sql` during setup.
+submit an add, edit, or delete form. Booking forms create reservations or change
+their status; bookings have no delete action. Do not rerun `dbms.sql` during setup.
 
 ## Test the database connection
 
@@ -91,7 +92,7 @@ Open http://127.0.0.1:5000/movies or choose Movies in the sidebar.
   explains why. No show or booking is deleted automatically.
 - Database failures and duplicate IDs display messages without exposing credentials.
 
-Movie, customer and show forms include a session token to prevent unwanted cross-site submissions.
+All forms that write records include a session token to prevent unwanted cross-site submissions.
 The app generates a secret key for each run. An optional `SECRET_KEY` environment
 variable can keep sessions stable across restarts. If a form expires after a
 restart, reload it before submitting again.
@@ -153,14 +154,78 @@ Open http://127.0.0.1:5000/shows or choose Shows in the sidebar.
   the existing `DECIMAL(8,2)` column. Python uses `Decimal` for submitted prices.
 - Delete requires confirmation. Any existing booking, including a cancelled
   booking, prevents deletion and produces an explanatory message.
-- This increment provides basic CRUD and input validation. It does not add
-  screen-overlap detection or a booking management workflow.
+- Shows management provides basic CRUD and input validation. It does not add
+  screen-overlap detection.
 
-All 44 automated tests passed: 18 Shows tests plus the existing 26 Movie and
+At the Shows increment, all 44 automated tests passed: 18 Shows tests plus the existing 26 Movie and
 Customer tests. Live MySQL checks covered listing, joined names, search, add,
 edit, duplicate IDs, invalid references/prices/dates/times, unreferenced deletion,
 and booking-blocked deletion through the Flask route. The temporary show was
 deleted and a temporary booking was rolled back. Original records were unchanged.
+
+## Bookings management
+
+Open http://127.0.0.1:5000/bookings or choose Bookings in the sidebar.
+
+- The list joins bookings to customers, shows, movies, seats and payments.
+  Search matches part of a customer or movie name. View opens complete booking,
+  customer, show, screen, multiplex, seat and payment details.
+- Choose Create Booking, select an existing show, and click Load seats. This
+  reloads the form, so choose the show before entering the remaining details.
+  Customer, seat and payment choices all come from the existing database.
+- Only seats in the show's screen without a Pending or Confirmed booking for
+  that same show can be selected. Availability is checked again when saving.
+  A seat can be booked for different shows independently.
+- Booking IDs must be unique and contain 1–10 letters, numbers, hyphens or
+  underscores. Date and time must be valid; historical dates are allowed.
+  Total amount must be 0.01–999999.99 with at most two decimal places.
+- New bookings may be Pending or Confirmed. Confirmation requires the linked
+  payment's status to be Paid. Pending bookings reserve the seat too.
+- On the details page, Pending bookings can be confirmed or cancelled, and
+  Confirmed bookings can be cancelled. Cancelled bookings remain in history
+  and cannot be reopened. Cancellation releases availability for that show.
+  There is no booking deletion route or button.
+
+### Transactions and the existing triggers
+
+Each booking write runs in one transaction with commit on success and rollback
+on failure. The app locks the existing show and seat rows before checking
+availability, so simultaneous booking requests through the app cannot reserve
+the same show/seat pair. Payment is also locked while its status is checked.
+
+Creation first inserts Pending, invoking `prevent_double_booking`. If Confirmed
+was selected, it then updates the status within the same transaction, invoking
+`check_payment` and `update_seat_status`. Later status changes also run the
+existing update triggers. The app does not install or change any trigger.
+
+The legacy `update_seat_status` trigger writes a global `Seat_Status`, which
+cannot represent reservations for multiple shows. It remains unchanged, but
+the interface calculates availability from active bookings for each Show_ID
+and Seat_ID instead. Cancellation in one show therefore does not free the
+seat in another show that still has an active booking.
+
+Existing schema limitations remain: a payment can be linked to multiple
+bookings, and entered totals are not automatically reconciled against payment
+amounts or ticket prices. Cancellation does not refund or modify payments.
+The concurrency protection assumes booking writes use the app's locking
+sequence; arbitrary external SQL still has the original schema's limitations.
+Shows management still permits editing a booked show's screen, so keep that
+screen consistent with existing reservations; mismatched seats cannot be
+confirmed through this module. No payment gateway or payment editing is added.
+
+### Booking test results
+
+All 63 automated tests passed: 19 booking tests and all 44 existing tests.
+Run them with `python -m unittest discover -s tests -v`.
+
+Separate live MySQL checks passed for joined listings/details, both searches,
+Pending and paid Confirmed creation, unpaid confirmation rejection, duplicate
+IDs/reservations, wrong-screen rejection, status changes, cancellation and
+rebooking, and independent availability across shows. Direct SQL checks verified
+the existing payment and duplicate triggers; confirmation/cancellation verified
+the seat-status trigger. Two simultaneous same-show/seat requests produced
+exactly one successful booking. Temporary records were removed, and snapshots
+of every row in all ten tables matched before and after the checks.
 
 ## Connection troubleshooting
 
@@ -179,8 +244,8 @@ runs one `SELECT` containing four `COUNT(*)` subqueries, returns a dictionary,
 and closes the cursor and connection. Jinja renders the results into HTML.
 Bootstrap is stored locally, so styling works without internet access.
 
-The dashboard query is fixed SQL with no input values. Movie/customer/show form and search
+The dashboard query is fixed SQL with no input values. Management form and search
 values are passed separately using Connector/Python `%s` parameters, never
-inserted into the SQL text. Each movie/customer/show write commits on success and rolls back
+inserted into the SQL text. Each write commits on success and rolls back
 on a database error. Cursors and connections are closed after use. Existing
-report queries and booking workflows remain for later increments.
+report queries, Payments and Food Orders pages remain for later increments.

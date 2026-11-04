@@ -315,3 +315,184 @@ def delete_show(show_id):
         except Error:
             connection.rollback()
             raise
+
+
+class BookingRuleError(ValueError):
+    """A booking rule failed; its message can be shown to the user."""
+
+
+# Shared SELECT for the booking list and its complete details page.
+BOOKING_SELECT = """
+    SELECT b.Booking_ID, b.Customer_ID, b.Show_ID, b.Seat_ID, b.Payment_ID,
+           b.Booking_Date, CAST(b.Booking_Time AS CHAR) AS Booking_Time,
+           b.Total_Amount, b.Booking_Status,
+           c.Customer_Name, c.Phone, c.Email,
+           m.Movie_ID, m.Movie_Name, s.Show_Date,
+           CAST(s.Show_Time AS CHAR) AS Show_Time, s.Ticket_Price,
+           sc.Screen_ID, sc.Screen_Name, mx.Multiplex_Name,
+           st.Seat_Number, st.Seat_Type,
+           p.Amount AS Payment_Amount, p.Payment_Mode, p.Payment_Date, p.Payment_Status
+    FROM Booking AS b
+    LEFT JOIN Customer AS c ON b.Customer_ID = c.Customer_ID
+    LEFT JOIN `Show` AS s ON b.Show_ID = s.Show_ID
+    LEFT JOIN Movie AS m ON s.Movie_ID = m.Movie_ID
+    LEFT JOIN Seat AS st ON b.Seat_ID = st.Seat_ID
+    LEFT JOIN Payment AS p ON b.Payment_ID = p.Payment_ID
+    LEFT JOIN Screen AS sc ON s.Screen_ID = sc.Screen_ID
+    LEFT JOIN Multiplex AS mx ON sc.Multiplex_ID = mx.Multiplex_ID
+"""
+
+
+def get_bookings(search=""):
+    pattern = "%" + search.replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%"
+    with get_connection() as connection:
+        with connection.cursor(dictionary=True) as cursor:
+            cursor.execute(BOOKING_SELECT + """
+                WHERE %s = '' OR c.Customer_Name LIKE %s ESCAPE '!'
+                    OR m.Movie_Name LIKE %s ESCAPE '!'
+                ORDER BY b.Booking_Date DESC, b.Booking_Time DESC, b.Booking_ID
+            """, (search, pattern, pattern))
+            return cursor.fetchall()
+
+
+def get_booking(booking_id):
+    with get_connection() as connection:
+        with connection.cursor(dictionary=True) as cursor:
+            cursor.execute(BOOKING_SELECT + " WHERE b.Booking_ID = %s", (booking_id,))
+            return cursor.fetchone()
+
+
+def get_booking_payments():
+    """Read existing payment choices; this module never creates or edits payments."""
+    with get_connection() as connection:
+        with connection.cursor(dictionary=True) as cursor:
+            cursor.execute("""
+                SELECT Payment_ID, Amount, Payment_Mode, Payment_Status
+                FROM Payment ORDER BY Payment_ID
+            """)
+            return cursor.fetchall()
+
+
+def get_available_seats(show_id):
+    """Availability belongs to a show/seat pair, never Seat.Seat_Status."""
+    with get_connection() as connection:
+        with connection.cursor(dictionary=True) as cursor:
+            cursor.execute("""
+                SELECT st.Seat_ID, st.Seat_Number, st.Seat_Type
+                FROM Seat AS st
+                JOIN `Show` AS s ON st.Screen_ID = s.Screen_ID
+                WHERE s.Show_ID = %s AND NOT EXISTS (
+                    SELECT 1 FROM Booking AS b
+                    WHERE b.Show_ID = s.Show_ID AND b.Seat_ID = st.Seat_ID
+                        AND b.Booking_Status IN ('Pending', 'Confirmed')
+                )
+                ORDER BY st.Seat_Number, st.Seat_ID
+            """, (show_id,))
+            return cursor.fetchall()
+
+
+def lock_booking_seat(cursor, show_id, seat_id):
+    """All booking writes lock show then seat in the same order.
+
+    The existing show row serializes reservations for that show, including when
+    no booking yet exists. The seat lock also coordinates the legacy seat trigger
+    across different shows using the same physical seat.
+    """
+    cursor.execute("SELECT Screen_ID FROM `Show` WHERE Show_ID = %s FOR UPDATE", (show_id,))
+    show = cursor.fetchone()
+    if show is None:
+        raise BookingRuleError("The selected show no longer exists.")
+    cursor.execute("SELECT Screen_ID FROM Seat WHERE Seat_ID = %s FOR UPDATE", (seat_id,))
+    seat = cursor.fetchone()
+    if seat is None or not show['Screen_ID'] or seat['Screen_ID'] != show['Screen_ID']:
+        raise BookingRuleError("Select a seat belonging to this show's screen.")
+
+
+def check_booking_availability(cursor, show_id, seat_id, exclude_booking_id=None):
+    cursor.execute("""
+        SELECT Booking_ID FROM Booking
+        WHERE Show_ID = %s AND Seat_ID = %s
+            AND Booking_Status IN ('Pending', 'Confirmed')
+            AND (%s IS NULL OR Booking_ID <> %s)
+        LIMIT 1
+    """, (show_id, seat_id, exclude_booking_id, exclude_booking_id))
+    if cursor.fetchone() is not None:
+        raise BookingRuleError("This seat is already reserved for this show. Please select another seat.")
+
+
+def check_booking_payment(cursor, payment_id, require_paid):
+    cursor.execute("SELECT Payment_Status FROM Payment WHERE Payment_ID = %s FOR UPDATE", (payment_id,))
+    payment = cursor.fetchone()
+    if payment is None:
+        raise BookingRuleError("Select an existing payment record.")
+    if require_paid and payment['Payment_Status'] != 'Paid':
+        raise BookingRuleError("Booking cannot be confirmed until its linked payment is Paid.")
+
+
+def add_booking(booking):
+    """Reserve first, then optionally confirm so all three existing triggers run."""
+    with get_connection() as connection:
+        try:
+            connection.start_transaction(isolation_level='READ COMMITTED')
+            with connection.cursor(dictionary=True) as cursor:
+                if booking['Booking_Status'] not in ('Pending', 'Confirmed'):
+                    raise BookingRuleError("New bookings must be Pending or Confirmed.")
+                lock_booking_seat(cursor, booking['Show_ID'], booking['Seat_ID'])
+                check_booking_availability(cursor, booking['Show_ID'], booking['Seat_ID'])
+                check_booking_payment(cursor, booking['Payment_ID'], booking['Booking_Status'] == 'Confirmed')
+                cursor.execute("SELECT Customer_ID FROM Customer WHERE Customer_ID = %s", (booking['Customer_ID'],))
+                if cursor.fetchone() is None:
+                    raise BookingRuleError("Select an existing customer.")
+                # BEFORE INSERT invokes prevent_double_booking.
+                cursor.execute("""
+                    INSERT INTO Booking (Booking_ID, Customer_ID, Show_ID, Seat_ID,
+                        Payment_ID, Booking_Date, Booking_Time, Total_Amount, Booking_Status)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'Pending')
+                """, (booking['Booking_ID'], booking['Customer_ID'], booking['Show_ID'],
+                      booking['Seat_ID'], booking['Payment_ID'], booking['Booking_Date'],
+                      booking['Booking_Time'], booking['Total_Amount']))
+                if booking['Booking_Status'] == 'Confirmed':
+                    # Invokes check_payment and update_seat_status before commit.
+                    cursor.execute("UPDATE Booking SET Booking_Status = 'Confirmed' WHERE Booking_ID = %s",
+                                   (booking['Booking_ID'],))
+            connection.commit()
+        except (Error, BookingRuleError):
+            connection.rollback()
+            raise
+
+
+def update_booking_status(booking_id, new_status):
+    """Pending -> Confirmed/Cancelled; Confirmed -> Cancelled. Keep history."""
+    with get_connection() as connection:
+        try:
+            connection.start_transaction(isolation_level='READ COMMITTED')
+            with connection.cursor(dictionary=True) as cursor:
+                if new_status not in ('Confirmed', 'Cancelled'):
+                    raise BookingRuleError("Choose Confirmed or Cancelled.")
+                cursor.execute("SELECT Show_ID, Seat_ID FROM Booking WHERE Booking_ID = %s", (booking_id,))
+                original = cursor.fetchone()
+                if original is None:
+                    connection.rollback()
+                    return False
+                lock_booking_seat(cursor, original['Show_ID'], original['Seat_ID'])
+                cursor.execute("SELECT * FROM Booking WHERE Booking_ID = %s FOR UPDATE", (booking_id,))
+                booking = cursor.fetchone()
+                if booking is None:
+                    connection.rollback()
+                    return False
+                if (booking['Show_ID'], booking['Seat_ID']) != (original['Show_ID'], original['Seat_ID']):
+                    raise BookingRuleError("This booking changed while you were editing it. Reload and try again.")
+                allowed = {'Pending': ('Confirmed', 'Cancelled'), 'Confirmed': ('Cancelled',)}
+                if new_status not in allowed.get(booking['Booking_Status'], ()):
+                    raise BookingRuleError("This status change is not allowed. Cancelled bookings cannot be reopened.")
+                if new_status == 'Confirmed':
+                    check_booking_availability(cursor, booking['Show_ID'], booking['Seat_ID'], booking_id)
+                    check_booking_payment(cursor, booking['Payment_ID'], True)
+                # Existing BEFORE/AFTER UPDATE triggers remain in control.
+                cursor.execute("UPDATE Booking SET Booking_Status = %s WHERE Booking_ID = %s",
+                               (new_status, booking_id))
+            connection.commit()
+            return True
+        except (Error, BookingRuleError):
+            connection.rollback()
+            raise

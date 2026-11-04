@@ -15,6 +15,8 @@ from db import (
     get_movie, get_movies, update_movie,
     add_customer, delete_customer, get_customer, get_customers, update_customer,
     add_show, delete_show, get_show, get_shows, get_screens, update_show,
+    BookingRuleError, add_booking, get_booking, get_bookings, get_booking_payments,
+    get_available_seats, update_booking_status,
 )
 
 
@@ -39,6 +41,7 @@ def protect_movie_forms():
         "movie_add", "movie_edit", "movie_delete",
         "customer_add", "customer_edit", "customer_delete",
         "show_add", "show_edit", "show_delete",
+        "booking_add", "booking_status",
     }:
         expected = session.get("csrf_token", "")
         submitted = request.form.get("csrf_token", "")
@@ -440,6 +443,143 @@ def show_delete(show_id):
             flash("Show deleted successfully.", "success")
             return redirect(url_for("shows"))
     return render_template("shows/delete.html", show=show, error=error_message), status
+
+
+def validate_booking(form, customers, shows, payments):
+    booking = {key: form.get(key, "").strip() for key in (
+        'Booking_ID', 'Customer_ID', 'Show_ID', 'Seat_ID', 'Payment_ID',
+        'Booking_Date', 'Booking_Time', 'Total_Amount', 'Booking_Status'
+    )}
+    errors = []
+    if not re.fullmatch(r'[A-Za-z0-9_-]{1,10}', booking['Booking_ID']):
+        errors.append('Booking ID must contain 1–10 letters, numbers, hyphens, or underscores.')
+    for field, label, choices in (
+        ('Customer_ID', 'customer', customers), ('Show_ID', 'show', shows),
+        ('Payment_ID', 'payment', payments),
+    ):
+        if booking[field] not in {row[field] for row in choices}:
+            errors.append(f'Select an existing {label}.')
+    if not booking['Seat_ID'] or len(booking['Seat_ID']) > 10:
+        errors.append('Select an available seat for the chosen show.')
+    try:
+        if not re.fullmatch(r'[0-9]{4}-[0-9]{2}-[0-9]{2}', booking['Booking_Date']):
+            raise ValueError
+        if date.fromisoformat(booking['Booking_Date']).year < 1000:
+            raise ValueError
+    except ValueError:
+        errors.append('Enter a valid booking date between 1000-01-01 and 9999-12-31.')
+    try:
+        if not re.fullmatch(r'[0-9]{2}:[0-9]{2}(?::[0-9]{2})?', booking['Booking_Time']):
+            raise ValueError
+        booking['Booking_Time'] = time.fromisoformat(booking['Booking_Time']).isoformat()
+    except ValueError:
+        errors.append('Enter a valid booking time from 00:00:00 to 23:59:59.')
+    amount = booking['Total_Amount']
+    if not re.fullmatch(r'[0-9]{1,6}(?:\.[0-9]{1,2})?', amount) or Decimal(amount) <= 0:
+        errors.append('Total amount must be between 0.01 and 999999.99, with at most two decimal places.')
+    else:
+        booking['Total_Amount'] = Decimal(amount)
+    if booking['Booking_Status'] not in ('Pending', 'Confirmed'):
+        errors.append('A new booking must be Pending or Confirmed.')
+    return booking, errors
+
+
+def booking_error_message(error):
+    if isinstance(error, BookingRuleError):
+        return str(error)
+    if isinstance(error, ValueError):
+        return database_error_message(error)
+    if error.errno == 1062:
+        return 'That Booking ID already exists. Please choose a different ID.'
+    if error.errno == 1452:
+        return 'A selected customer, show, seat, or payment no longer exists. Reload and choose current records.'
+    if error.errno == 1644:
+        if 'payment' in (error.msg or '').lower():
+            return 'Booking cannot be confirmed until its linked payment is Paid.'
+        if 'seat' in (error.msg or '').lower():
+            return 'This seat is already reserved for this show. Please select another seat.'
+        return 'An existing database trigger rejected this booking. Check its payment and seat.'
+    if error.errno in (1205, 1213):
+        return 'Another booking operation is using this record. Nothing was saved; reload and try again.'
+    if error.errno in (1045, 1698, 1049, 1044, 1142, 2002, 2003, 2005):
+        return database_error_message(error)
+    return 'The booking operation could not be completed. Check the database connection and try again.'
+
+
+@app.route('/bookings')
+def bookings():
+    search = request.args.get('q', '').strip()
+    try:
+        records = get_bookings(search)
+    except (Error, ValueError) as error:
+        return render_template('bookings/list.html', bookings=None, search=search,
+                               error=booking_error_message(error)), 503
+    return render_template('bookings/list.html', bookings=records, search=search, error=None)
+
+
+@app.route('/bookings/add', methods=['GET', 'POST'])
+def booking_add():
+    booking = dict(request.form) if request.method == 'POST' else {
+        'Show_ID': request.args.get('Show_ID', '').strip(), 'Booking_Status': 'Pending'
+    }
+    errors, status = [], 200
+    try:
+        customers, shows, payments = get_customers(), get_shows(), get_booking_payments()
+        if request.method == 'POST':
+            booking, errors = validate_booking(request.form, customers, shows, payments)
+            status = 400
+            if not errors:
+                try:
+                    add_booking(booking)
+                except (Error, ValueError) as error:
+                    errors = [booking_error_message(error)]
+                    status = 409 if isinstance(error, BookingRuleError) or getattr(error, 'errno', None) in (1062, 1452, 1644, 1205, 1213) else 503
+                else:
+                    flash('Booking created successfully.', 'success')
+                    return redirect(url_for('booking_detail', booking_id=booking['Booking_ID']))
+        selected_show = next((row for row in shows if row['Show_ID'] == booking.get('Show_ID')), None)
+        seats = get_available_seats(selected_show['Show_ID']) if selected_show else []
+    except (Error, ValueError) as error:
+        return render_template('bookings/list.html', bookings=None, search='',
+                               error=booking_error_message(error)), 503
+    return render_template('bookings/form.html', booking=booking, errors=errors,
+                           customers=customers, shows=shows, payments=payments,
+                           selected_show=selected_show, seats=seats), status
+
+
+@app.route('/bookings/<booking_id>')
+def booking_detail(booking_id):
+    try:
+        booking = get_booking(booking_id)
+    except (Error, ValueError) as error:
+        return render_template('bookings/list.html', bookings=None, search='',
+                               error=booking_error_message(error)), 503
+    if booking is None:
+        abort(404, description='Booking not found.')
+    return render_template('bookings/detail.html', booking=booking, error=None)
+
+
+@app.route('/bookings/<booking_id>/status', methods=['POST'])
+def booking_status(booking_id):
+    new_status = request.form.get('Booking_Status', '')
+    if new_status not in ('Confirmed', 'Cancelled'):
+        abort(400, description='Choose Confirmed or Cancelled.')
+    try:
+        exists = update_booking_status(booking_id, new_status)
+    except (Error, ValueError) as error:
+        message = booking_error_message(error)
+        status = 409 if isinstance(error, BookingRuleError) or getattr(error, 'errno', None) in (1644, 1205, 1213) else 503
+        try:
+            booking = get_booking(booking_id)
+        except (Error, ValueError):
+            booking = None
+        if booking is None:
+            return render_template('bookings/list.html', bookings=None, search='', error=message), status
+        return render_template('bookings/detail.html', booking=booking, error=message), status
+    if not exists:
+        abort(404, description='Booking not found.')
+    flash(f'Booking status changed to {new_status}.', 'success')
+    return redirect(url_for('booking_detail', booking_id=booking_id))
 
 
 @app.route("/")

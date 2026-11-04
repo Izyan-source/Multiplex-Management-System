@@ -1,0 +1,94 @@
+{% extends 'base.html' %}
+{% block title %}Create Booking{% endblock %}
+{% block content %}
+<header class="page-header">
+    <div><p class="eyebrow">RESERVATIONS</p><h1>Create Booking</h1>
+        <p class="text-secondary mb-0">Choose a show first, then complete the reservation.</p></div>
+    <a class="btn btn-outline-secondary" href="{{ url_for('bookings') }}">Back to Bookings</a>
+</header>
+{% if errors %}<div class="alert alert-danger" role="alert">
+    <p class="fw-semibold mb-2">Please check the following:</p>
+    <ul class="mb-0">{% for error in errors %}<li>{{ error }}</li>{% endfor %}</ul>
+</div>{% endif %}
+<section class="card overview-panel movie-form mb-4"><div class="card-body">
+    <form method="get" action="{{ url_for('booking_add') }}" class="row g-2 align-items-end">
+        <div class="col-12 col-md-9">
+            <label class="form-label" for="chosen-show">Show</label>
+            <select class="form-select" id="chosen-show" name="Show_ID" required>
+                <option value="">Select a show</option>
+                {% for show in shows %}
+                <option value="{{ show.Show_ID }}"{% if booking.get('Show_ID') == show.Show_ID %} selected{% endif %}>{{ show.Movie_Name or 'Unnamed movie' }} · {{ show.Show_Date or 'No date' }} {{ show.Show_Time or '' }} · {{ show.Screen_Name or 'No screen' }} ({{ show.Show_ID }})</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-auto"><button class="btn btn-primary movie-primary" type="submit"{% if not shows %} disabled{% endif %}>Load seats</button></div>
+    </form>
+    <p class="form-text mb-0">Changing the show reloads this form. Choose it before entering the booking details.</p>
+    {% if not shows %}<p class="text-secondary mt-3 mb-0">No shows are available. Schedule a show first.</p>{% endif %}
+</div></section>
+{% if selected_show %}
+{% if not seats %}<div class="alert alert-warning" role="alert">No available seats are registered for this show's screen. Choose another show.</div>{% endif %}
+{% if not customers or not payments %}<div class="alert alert-warning" role="alert">A booking requires an existing customer and payment record. Check those records before continuing.</div>{% endif %}
+<section class="card overview-panel movie-form"><div class="card-body">
+    <h2 class="h5">{{ selected_show.Movie_Name or 'Selected show' }}</h2>
+    <p class="text-secondary">{{ selected_show.Show_Date or 'No date' }} · {{ selected_show.Show_Time or 'No time' }} · {{ selected_show.Screen_Name or 'No screen' }} · Show {{ selected_show.Show_ID }}</p>
+    <form method="post" action="{{ url_for('booking_add') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="Show_ID" value="{{ selected_show.Show_ID }}">
+        <div class="row g-3">
+            <div class="col-md-4">
+                <label class="form-label" for="Booking_ID">Booking ID</label>
+                <input class="form-control" id="Booking_ID" name="Booking_ID" value="{{ booking.get('Booking_ID') or '' }}" maxlength="10" pattern="[A-Za-z0-9_\-]{1,10}" required aria-describedby="booking-id-help">
+                <div id="booking-id-help" class="form-text">Up to 10 letters, numbers, hyphens, or underscores.</div>
+            </div>
+            <div class="col-md-8">
+                <label class="form-label" for="Customer_ID">Customer</label>
+                <select class="form-select" id="Customer_ID" name="Customer_ID" required>
+                    <option value="">Select a customer</option>
+                    {% for customer in customers %}<option value="{{ customer.Customer_ID }}"{% if booking.get('Customer_ID') == customer.Customer_ID %} selected{% endif %}>{{ customer.Customer_Name or 'Unnamed customer' }} ({{ customer.Customer_ID }})</option>{% endfor %}
+                </select>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label" for="Seat_ID">Available seat</label>
+                <select class="form-select" id="Seat_ID" name="Seat_ID" required>
+                    <option value="">Select a seat</option>
+                    {% for seat in seats %}<option value="{{ seat.Seat_ID }}"{% if booking.get('Seat_ID') == seat.Seat_ID %} selected{% endif %}>{{ seat.Seat_Number or 'Unnamed seat' }} · {{ seat.Seat_Type or 'Unspecified type' }} ({{ seat.Seat_ID }})</option>{% endfor %}
+                </select>
+                <div class="form-text">Availability is checked again when you save.</div>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label" for="Payment_ID">Existing payment</label>
+                <select class="form-select" id="Payment_ID" name="Payment_ID" required>
+                    <option value="">Select a payment</option>
+                    {% for payment in payments %}<option value="{{ payment.Payment_ID }}"{% if booking.get('Payment_ID') == payment.Payment_ID %} selected{% endif %}>{{ payment.Payment_ID }} · {{ payment.Payment_Status or 'Unknown status' }} · {{ '%.2f'|format(payment.Amount) if payment.Amount is not none else 'No amount' }} · {{ payment.Payment_Mode or 'Unspecified mode' }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label" for="Booking_Date">Booking Date</label>
+                <input class="form-control" type="date" id="Booking_Date" name="Booking_Date" value="{{ booking.get('Booking_Date') or '' }}" min="1000-01-01" max="9999-12-31" required>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label" for="Booking_Time">Booking Time</label>
+                <input class="form-control" type="time" id="Booking_Time" name="Booking_Time" value="{{ booking.get('Booking_Time') or '' }}" step="1" required>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label" for="Total_Amount">Total Amount</label>
+                <input class="form-control" type="number" id="Total_Amount" name="Total_Amount" value="{{ booking.get('Total_Amount') if booking.get('Total_Amount') is not none else '' }}" min="0.01" max="999999.99" step="0.01" required>
+                <div class="form-text">Show ticket price: {{ '%.2f'|format(selected_show.Ticket_Price) if selected_show.Ticket_Price is not none else 'not set' }}.</div>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label" for="Booking_Status">Booking Status</label>
+                <select class="form-select" id="Booking_Status" name="Booking_Status" required>
+                    {% for status in ['Pending', 'Confirmed'] %}<option value="{{ status }}"{% if booking.get('Booking_Status') == status %} selected{% endif %}>{{ status }}</option>{% endfor %}
+                </select>
+                <div class="form-text">Confirmation requires a Paid payment. Pending bookings also reserve the seat.</div>
+            </div>
+        </div>
+        <div class="d-flex gap-2 mt-4">
+            <button class="btn btn-primary movie-primary" type="submit"{% if not seats or not customers or not payments %} disabled{% endif %}>Create Booking</button>
+            <a class="btn btn-outline-secondary" href="{{ url_for('bookings') }}">Cancel</a>
+        </div>
+    </form>
+</div></section>
+{% endif %}
+{% endblock %}

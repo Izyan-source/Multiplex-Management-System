@@ -1,0 +1,48 @@
+{% extends 'base.html' %}
+{% block title %}Bookings{% endblock %}
+{% block content %}
+<header class="page-header">
+    <div><p class="eyebrow">RESERVATIONS</p><h1>Bookings</h1>
+        <p class="text-secondary mb-0">View reservations and manage their status.</p></div>
+    <a class="btn btn-primary movie-primary" href="{{ url_for('booking_add') }}">Create Booking</a>
+</header>
+{% if error %}<div class="alert alert-warning" role="alert">{{ error }}</div>{% endif %}
+<section class="card overview-panel" aria-label="Bookings">
+    <div class="card-body">
+        <form method="get" action="{{ url_for('bookings') }}" class="row g-2 align-items-end mb-4" role="search">
+            <div class="col-12 col-md-7 col-lg-6">
+                <label class="form-label" for="booking-search">Search by customer or movie name</label>
+                <input class="form-control" type="search" id="booking-search" name="q" value="{{ search }}" placeholder="Enter a customer or movie name">
+            </div>
+            <div class="col-auto"><button class="btn btn-primary movie-primary" type="submit">Search</button></div>
+            {% if search %}<div class="col-auto"><a class="btn btn-outline-secondary" href="{{ url_for('bookings') }}">Clear</a></div>{% endif %}
+        </form>
+        {% if bookings is not none %}
+        <div class="table-responsive">
+            <table class="table align-middle movie-table">
+                <caption>{{ bookings|length }} booking{% if bookings|length != 1 %}s{% endif %}{% if search %} matching your search{% endif %}</caption>
+                <thead><tr>
+                    {% for label in ['Booking ID', 'Customer Name', 'Movie Name', 'Show Date', 'Show Time', 'Seat Number', 'Payment ID', 'Booking Date', 'Total Amount', 'Booking Status', 'Details'] %}
+                    <th scope="col">{{ label }}</th>
+                    {% endfor %}
+                </tr></thead>
+                <tbody>
+                {% for booking in bookings %}
+                <tr>
+                    {% for key in ['Booking_ID', 'Customer_Name', 'Movie_Name', 'Show_Date', 'Show_Time', 'Seat_Number', 'Payment_ID', 'Booking_Date'] %}
+                    <td class="text-nowrap">{{ booking[key] if booking[key] is not none else '—' }}</td>
+                    {% endfor %}
+                    <td>{{ '%.2f'|format(booking.Total_Amount) if booking.Total_Amount is not none else '—' }}</td>
+                    <td><span class="badge {{ 'text-bg-success' if booking.Booking_Status == 'Confirmed' else 'text-bg-warning' if booking.Booking_Status == 'Pending' else 'text-bg-secondary' }}">{{ booking.Booking_Status or 'Unknown' }}</span></td>
+                    <td><a class="btn btn-sm btn-outline-secondary" href="{{ url_for('booking_detail', booking_id=booking.Booking_ID) }}" aria-label="View booking {{ booking.Booking_ID }}">View</a></td>
+                </tr>
+                {% else %}
+                <tr><td colspan="11" class="text-center text-secondary py-5">{% if search %}No bookings match your search.{% else %}No bookings yet. Use Create Booking to make a reservation.{% endif %}</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}
