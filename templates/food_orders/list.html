@@ -6,8 +6,8 @@
         <p class="text-secondary mb-0">Browse and manage food orders linked to bookings.</p></div>
     <a class="btn btn-primary movie-primary" href="{{ url_for('food_order_add') }}">Add Food Order</a>
 </header>
-{% for category, message in get_flashed_messages(with_categories=true) %}<div class="alert alert-{{ category }}" role="status">{{ message }}</div>{% endfor %}
-{% if error %}<div class="alert alert-warning" role="alert">{{ error }}</div>{% endif %}
+{% include 'shared/flash_messages.html' %}
+{% include 'shared/page_error.html' %}
 <section class="card overview-panel" aria-label="Food orders"><div class="card-body">
     <form method="get" action="{{ url_for('food_orders') }}" class="row g-2 align-items-end mb-4" role="search">
         <div class="col-12 col-md-8">
@@ -18,7 +18,8 @@
         {% if search %}<div class="col-auto"><a class="btn btn-outline-secondary" href="{{ url_for('food_orders') }}">Clear</a></div>{% endif %}
     </form>
     {% if orders is not none %}
-    <div class="table-responsive"><table class="table align-middle movie-table">
+    {% include 'shared/table_help.html' %}
+        <div class="table-responsive" tabindex="0" role="region" aria-label="Food Orders table" aria-describedby="table-help"><table class="table align-middle movie-table">
         <caption>{{ orders|length }} food order{% if orders|length != 1 %}s{% endif %}{% if search %} matching your search{% endif %}</caption>
         <thead><tr>
             <th scope="col">Order ID</th><th scope="col">Booking ID</th><th scope="col">Customer Name</th>

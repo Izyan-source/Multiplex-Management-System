@@ -1,0 +1,5 @@
+{% if error %}
+<div class="alert alert-danger feedback-message" role="alert" tabindex="-1" data-error-summary>
+    <strong>Unable to complete this request.</strong> {{ error }}
+</div>
+{% endif %}

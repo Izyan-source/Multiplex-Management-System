@@ -11,7 +11,7 @@
 </header>
 
 {% if error %}
-<div class="alert alert-warning connection-alert" role="alert">
+<div class="alert alert-warning connection-alert" role="alert" tabindex="-1" data-error-summary>
     <h2 class="h6">Dashboard data is unavailable</h2>
     <p class="mb-0">{{ error }} After checking the connection, refresh this page.</p>
 </div>

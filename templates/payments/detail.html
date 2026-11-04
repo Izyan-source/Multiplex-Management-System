@@ -6,7 +6,7 @@
         <p class="text-secondary mb-0">Recorded details and associated bookings. No money is processed here.</p></div>
     <a class="btn btn-outline-secondary" href="{{ url_for('payments') }}">Back to Payments</a>
 </header>
-{% for category, message in get_flashed_messages(with_categories=true) %}<div class="alert alert-{{ category }}" role="status">{{ message }}</div>{% endfor %}
+{% include 'shared/flash_messages.html' %}
 <section class="card overview-panel mb-4"><div class="card-body">
     <h2 class="h5 mb-4">Payment details</h2>
     <dl class="row">
@@ -15,13 +15,14 @@
         <dd class="col-sm-8 text-break">{% if payment[key] is none %}—{% elif key == 'Amount' %}{{ '%.2f'|format(payment[key]) }}{% else %}{{ payment[key] }}{% endif %}</dd>
         {% endfor %}
     </dl>
-    <a class="btn btn-primary movie-primary" href="{{ url_for('payment_edit', payment_id=payment.Payment_ID) }}">Edit Payment</a>
+    <a class="btn btn-outline-secondary" href="{{ url_for('payment_edit', payment_id=payment.Payment_ID) }}">Edit Payment</a>
     <a class="btn btn-outline-danger" href="{{ url_for('payment_delete', payment_id=payment.Payment_ID) }}">Delete Payment</a>
 </div></section>
 <section class="card overview-panel"><div class="card-body">
     <h2 class="h5">Associated bookings</h2>
     <p class="text-secondary">Payment changes do not confirm bookings automatically. Open a pending booking to confirm it after its payment is Paid.</p>
-    <div class="table-responsive"><table class="table align-middle movie-table">
+    {% include 'shared/table_help.html' %}
+        <div class="table-responsive" tabindex="0" role="region" aria-label="Associated bookings table" aria-describedby="table-help"><table class="table align-middle movie-table">
         <thead><tr>{% for label in ['Booking ID', 'Customer Name', 'Movie Name', 'Show Date', 'Show Time', 'Seat Number', 'Booking Date', 'Booking Time', 'Total Amount', 'Booking Status', 'Details'] %}<th scope="col">{{ label }}</th>{% endfor %}</tr></thead>
         <tbody>{% for booking in bookings %}<tr>
             <td>{{ booking.Booking_ID }}</td><td>{{ booking.Customer_Name or '—' }}</td><td>{{ booking.Movie_Name or '—' }}</td>

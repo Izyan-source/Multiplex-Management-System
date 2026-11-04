@@ -6,7 +6,8 @@
         <p class="text-secondary mb-0">View reservations and manage their status.</p></div>
     <a class="btn btn-primary movie-primary" href="{{ url_for('booking_add') }}">Create Booking</a>
 </header>
-{% if error %}<div class="alert alert-warning" role="alert">{{ error }}</div>{% endif %}
+{% include 'shared/flash_messages.html' %}
+{% include 'shared/page_error.html' %}
 <section class="card overview-panel" aria-label="Bookings">
     <div class="card-body">
         <form method="get" action="{{ url_for('bookings') }}" class="row g-2 align-items-end mb-4" role="search">
@@ -18,7 +19,8 @@
             {% if search %}<div class="col-auto"><a class="btn btn-outline-secondary" href="{{ url_for('bookings') }}">Clear</a></div>{% endif %}
         </form>
         {% if bookings is not none %}
-        <div class="table-responsive">
+        {% include 'shared/table_help.html' %}
+        <div class="table-responsive" tabindex="0" role="region" aria-label="Bookings table" aria-describedby="table-help">
             <table class="table align-middle movie-table">
                 <caption>{{ bookings|length }} booking{% if bookings|length != 1 %}s{% endif %}{% if search %} matching your search{% endif %}</caption>
                 <thead><tr>

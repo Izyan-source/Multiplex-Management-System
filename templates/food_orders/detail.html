@@ -6,7 +6,7 @@
         <p class="text-secondary mb-0">Order details and the associated booking.</p></div>
     <a class="btn btn-outline-secondary" href="{{ url_for('food_orders') }}">Back to Food Orders</a>
 </header>
-{% for category, message in get_flashed_messages(with_categories=true) %}<div class="alert alert-{{ category }}" role="status">{{ message }}</div>{% endfor %}
+{% include 'shared/flash_messages.html' %}
 <section class="card overview-panel"><div class="card-body">
     <h2 class="h5 mb-4">Order details</h2>
     <dl class="row">
@@ -16,7 +16,7 @@
         {% endfor %}
     </dl>
     <div class="d-flex flex-wrap gap-2">
-        <a class="btn btn-primary movie-primary" href="{{ url_for('food_order_edit', order_id=order.Order_ID) }}">Edit Food Order</a>
+        <a class="btn btn-outline-secondary" href="{{ url_for('food_order_edit', order_id=order.Order_ID) }}">Edit Food Order</a>
         <a class="btn btn-outline-danger" href="{{ url_for('food_order_delete', order_id=order.Order_ID) }}">Delete Food Order</a>
         {% if order.Booking_ID %}<a class="btn btn-outline-secondary" href="{{ url_for('booking_detail', booking_id=order.Booking_ID) }}">Open Booking</a>{% endif %}
     </div>

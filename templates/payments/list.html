@@ -6,8 +6,8 @@
         <p class="text-secondary mb-0">Manage recorded payment details. No money is collected or transferred.</p></div>
     <a class="btn btn-primary movie-primary" href="{{ url_for('payment_add') }}">Record Payment</a>
 </header>
-{% for category, message in get_flashed_messages(with_categories=true) %}<div class="alert alert-{{ category }}" role="status">{{ message }}</div>{% endfor %}
-{% if error %}<div class="alert alert-warning" role="alert">{{ error }}</div>{% endif %}
+{% include 'shared/flash_messages.html' %}
+{% include 'shared/page_error.html' %}
 <section class="card overview-panel" aria-label="Payment records"><div class="card-body">
     <form method="get" action="{{ url_for('payments') }}" class="row g-2 align-items-end mb-4" role="search">
         <div class="col-12 col-md-7 col-lg-6">
@@ -18,7 +18,8 @@
         {% if search %}<div class="col-auto"><a class="btn btn-outline-secondary" href="{{ url_for('payments') }}">Clear</a></div>{% endif %}
     </form>
     {% if payments is not none %}
-    <div class="table-responsive"><table class="table align-middle movie-table">
+    {% include 'shared/table_help.html' %}
+        <div class="table-responsive" tabindex="0" role="region" aria-label="Payments table" aria-describedby="table-help"><table class="table align-middle movie-table">
         <caption>One row per payment and associated booking. Shared payments appear for each linked booking.</caption>
         <thead><tr>
             <th scope="col">Payment ID</th><th scope="col">Amount</th><th scope="col">Payment Mode</th>

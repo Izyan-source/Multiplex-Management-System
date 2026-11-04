@@ -5,16 +5,17 @@
     <p class="eyebrow">SCHEDULE</p>
     <h1>Delete Show</h1>
     <p class="text-secondary mb-0">Review the show before confirming deletion.</p>
-</div></header>
-{% if error %}<div class="alert alert-danger" role="alert">{{ error }}</div>{% endif %}
+</div><a class="btn btn-outline-secondary" href="{{ url_for('shows') }}">Back to Shows</a></header>
+{% include 'shared/page_error.html' %}
 <section class="card overview-panel movie-form"><div class="card-body">
     <h2 class="h5">{{ show.Movie_Name or 'Unassigned movie' }}</h2>
     <p class="text-secondary">Show ID: {{ show.Show_ID }} · {{ show.Screen_Name or 'Unassigned screen' }} · {{ show.Show_Date or 'No date' }} · {{ show.Show_Time or 'No time' }}</p>
     <p>This will permanently remove this show. Shows with existing bookings cannot be deleted.</p>
-    <form method="post" action="{{ url_for('show_delete', show_id=show.Show_ID) }}" class="d-flex gap-2">
+    <p class="fw-semibold">Deletion cannot be undone.</p>
+    <form method="post" action="{{ url_for('show_delete', show_id=show.Show_ID) }}" class="d-flex flex-wrap gap-2">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button class="btn btn-danger" type="submit">Delete Show</button>
-        <a class="btn btn-outline-secondary" href="{{ url_for('shows') }}">Back to Shows</a>
+        <a class="btn btn-outline-secondary" href="{{ url_for('shows') }}">Cancel</a>
     </form>
 </div></section>
 {% endblock %}

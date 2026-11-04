@@ -2,13 +2,14 @@
 {% block title %}Delete Payment{% endblock %}
 {% block content %}
 <header class="page-header"><div><p class="eyebrow">PAYMENT RECORDS</p><h1>Delete Payment</h1>
-    <p class="text-secondary mb-0">Review the record before confirming deletion.</p></div></header>
-{% if error %}<div class="alert alert-danger" role="alert">{{ error }}</div>{% endif %}
+    <p class="text-secondary mb-0">Review the record before confirming deletion.</p></div><a class="btn btn-outline-secondary" href="{{ url_for('payments') }}">Back to Payments</a></header>
+{% include 'shared/page_error.html' %}
 <section class="card overview-panel movie-form"><div class="card-body">
     <h2 class="h5">Payment {{ payment.Payment_ID }}</h2>
     <p class="text-secondary">{{ '%.2f'|format(payment.Amount) if payment.Amount is not none else '—' }} · {{ payment.Payment_Mode or '—' }} · {{ payment.Payment_Date or '—' }} · {{ payment.Payment_Status or '—' }}</p>
     <p>This permanently removes an unreferenced payment record. Payments linked to any booking, including cancelled bookings, cannot be deleted. Deletion does not issue a refund.</p>
-    <form method="post" action="{{ url_for('payment_delete', payment_id=payment.Payment_ID) }}" class="d-flex gap-2">
+    <p class="fw-semibold">Deletion cannot be undone.</p>
+    <form method="post" action="{{ url_for('payment_delete', payment_id=payment.Payment_ID) }}" class="d-flex flex-wrap gap-2">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button class="btn btn-danger" type="submit">Delete Payment</button>
         <a class="btn btn-outline-secondary" href="{{ url_for('payment_detail', payment_id=payment.Payment_ID) }}">Cancel</a>

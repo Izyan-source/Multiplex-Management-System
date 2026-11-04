@@ -6,8 +6,8 @@
         <p class="text-secondary mb-0">Reservation details and current status.</p></div>
     <a class="btn btn-outline-secondary" href="{{ url_for('bookings') }}">Back to Bookings</a>
 </header>
-{% for category, message in get_flashed_messages(with_categories=true) %}<div class="alert alert-{{ category }}" role="status">{{ message }}</div>{% endfor %}
-{% if error %}<div class="alert alert-danger" role="alert">{{ error }}</div>{% endif %}
+{% include 'shared/flash_messages.html' %}
+{% include 'shared/page_error.html' %}
 <div class="row g-4">
     {% for title, fields in [
         ('Booking', [('Booking ID', 'Booking_ID'), ('Booking Date', 'Booking_Date'), ('Booking Time', 'Booking_Time'), ('Total Amount', 'Total_Amount'), ('Booking Status', 'Booking_Status')]),
@@ -31,16 +31,17 @@
         <form method="post" action="{{ url_for('booking_status', booking_id=booking.Booking_ID) }}" class="row g-2 align-items-end mt-2">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="col-12 col-sm-6 col-lg-4">
-                <label class="form-label" for="new-status">Change status to</label>
-                <select class="form-select" id="new-status" name="Booking_Status" required>
+                <label class="form-label" for="new-status">Change status to <span class="required-indicator" aria-hidden="true">*</span></label>
+                <select class="form-select" id="new-status" name="Booking_Status" required aria-describedby="status-help">
                     <option value="">Select a status</option>
                     {% if booking.Booking_Status == 'Pending' %}<option value="Confirmed">Confirmed</option>{% endif %}
                     <option value="Cancelled">Cancelled</option>
                 </select>
             </div>
             <div class="col-auto"><button class="btn btn-primary movie-primary" type="submit">Update Status</button></div>
+            <div class="col-auto"><a class="btn btn-outline-secondary" href="{{ url_for('booking_detail', booking_id=booking.Booking_ID) }}">Cancel</a></div>
         </form>
-        <p class="form-text mb-0 mt-3">Confirmation requires a Paid payment. Cancellation releases the seat for this show and keeps the booking history. It does not change or refund the payment. Cancelled bookings cannot be reopened.</p>
+        <p class="form-text mb-0 mt-3" id="status-help">Select a status before choosing Update Status. Confirmation requires a Paid payment. Cancellation releases the seat for this show and keeps the booking history. It does not change or refund the payment. Cancelled bookings cannot be reopened.</p>
         {% else %}<p class="text-secondary mb-0">This booking is retained for reference. No status changes are available.</p>{% endif %}
     </div></section></div>
 </div>

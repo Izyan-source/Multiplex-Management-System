@@ -12,6 +12,9 @@ connection check.
 - `templates/`: shared layout, dashboard, movie/customer/show pages, booking pages, and payment/food order list/form/details/delete pages.
 - `tests/test_movies.py`, `tests/test_customers.py`, `tests/test_shows.py`, `tests/test_bookings.py`, `tests/test_payments.py`, `tests/test_food_orders.py`: automated checks that do not connect to MySQL.
 - `static/`: custom CSS and local Bootstrap 5.3.8 CSS.
+- `static/interface.js`: optional inline validation feedback and accessible table guidance; no requests or automatic submissions.
+- `templates/shared/`: reusable success messages, error summaries and table guidance.
+- `tests/test_interface.py`: shared UI checks, with no live database writes.
 - `.env.example`: connection settings template.
 - `dbms.sql`: original project file, unchanged and never executed by the app.
 
@@ -320,6 +323,49 @@ was tested with mocked constraint errors rather than changing the schema.
 Totals are entered manually; there is no unit-price calculation, inventory or
 menu. Any existing booking is selectable, including cancelled bookings, and
 food-order changes do not update booking totals or payments.
+
+## Eight Golden Rules: interface improvements
+
+The existing sidebar, cards, Bootstrap layout and purple colour palette are
+preserved. These changes improve the current interface without changing Python
+routes, SQL queries, validation rules, booking/payment logic or the database.
+
+| Rule | Practical implementation |
+| --- | --- |
+| Strive for consistency | Shared success/error markup, consistent secondary Edit/Cancel actions, purple primary buttons and wrapping action rows. |
+| Seek universal usability | Visible keyboard focus, linked input help, a working skip-to-content focus target, named keyboard-scrollable table regions, stronger input borders and 44px mobile buttons/navigation. |
+| Offer informative feedback | Existing specific error messages remain visible in consistent alerts; native input errors also appear beside fields. Successful operations show a persistent Completed message. |
+| Design dialogs to yield closure | Successful redirects retain clear completion feedback. Existing deletion pages identify the record, explain the consequence and require explicit submission. |
+| Prevent errors | Required fields are marked with an asterisk and explained. Existing required/min/max/pattern constraints and all server validation remain intact. Invalid fields expose aria-invalid and descriptive errors. |
+| Permit easy reversal | All forms have Cancel/Back links. Delete pages have both Back and Cancel. The booking status form can be reset with Cancel; existing Edit actions remain available. |
+| Keep users in control | No automatic submissions, saves, booking confirmations or new popups. Changing selections never writes records; users still press the relevant submit button. |
+| Reduce short-term memory load | Helpful placeholders, existing descriptive dropdowns and selected-show details stay visible. Counts/captions appear above tables, and entered values remain available after validation errors. |
+
+Validation feedback is a small progressive enhancement: the shared script uses
+the browser's existing constraints to display inline messages, clears them as
+fields are corrected, and focuses the server error summary after a failed
+request. It does not replace server validation or issue network requests.
+Rules that only the server can check, such as duplicate IDs and foreign-key
+restrictions, continue to appear in the summary rather than being guessed in
+JavaScript. Without JavaScript, native browser validation and server summaries
+still work; inline feedback and automatic summary focus are unavailable.
+
+Verification: all 118 automated tests passed (the original 110 plus eight shared
+interface tests). All 27 live page variants loaded against MySQL; invalid forms,
+error presentation and Cancel/Back destinations passed. Success feedback was
+tested with mocked writes so no live records needed to be changed. Browser
+checks covered all module lists at 390px and 1280px, and forms at 320px, 390px
+and 1280px, plus the full selected-show booking form on mobile. Pages did not
+overflow horizontally; wide tables scroll within their regions. Keyboard
+scrolling, correction of inline errors, server-error focus and retained inputs
+were checked. The checked text colours exceed 4.5:1 contrast and input borders
+exceed 3:1 against white. This is not a complete screen-reader or cross-browser
+accessibility audit.
+
+Live checks used reads and invalid submissions only. Database snapshots verified
+all original records, table definitions and triggers unchanged; no temporary
+records required cleanup. Wide tables intentionally retain horizontal scrolling
+on small screens instead of changing the existing table layout.
 
 ## Connection troubleshooting
 

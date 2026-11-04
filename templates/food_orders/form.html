@@ -3,42 +3,42 @@
 {% block content %}
 <header class="page-header">
     <div><p class="eyebrow">FOOD ORDERS</p><h1>{{ 'Edit Food Order' if editing else 'Add Food Order' }}</h1>
-        <p class="text-secondary mb-0">Enter the food order details below. All fields are required.</p></div>
+        <p class="text-secondary mb-0">Enter the food order details below. Fields marked * are required.</p></div>
     <a class="btn btn-outline-secondary" href="{{ url_for('food_orders') }}">Back to Food Orders</a>
 </header>
-{% if errors %}<div class="alert alert-danger" role="alert"><p class="fw-semibold mb-2">Please check the following:</p><ul class="mb-0">{% for error in errors %}<li>{{ error }}</li>{% endfor %}</ul></div>{% endif %}
+{% include 'shared/form_errors.html' %}
 {% if not bookings %}<div class="alert alert-warning" role="alert">A food order requires an existing booking. Create a booking before continuing.</div>{% endif %}
 <section class="card overview-panel movie-form"><div class="card-body">
     <form method="post" action="{{ url_for('food_order_edit', order_id=order.Order_ID) if editing else url_for('food_order_add') }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="row g-3">
             <div class="col-md-4">
-                <label class="form-label" for="Order_ID">Order ID</label>
+                <label class="form-label" for="Order_ID">Order ID{% if not editing %} <span class="required-indicator" aria-hidden="true">*</span>{% endif %}</label>
                 <input class="form-control" id="Order_ID" name="Order_ID" value="{{ order.get('Order_ID') or '' }}" maxlength="10" required {% if editing %}readonly{% else %}pattern="[A-Za-z0-9_\-]{1,10}"{% endif %} aria-describedby="id-help">
                 <div class="form-text" id="id-help">{% if editing %}Order IDs cannot be changed.{% else %}Up to 10 letters, numbers, hyphens, or underscores.{% endif %}</div>
             </div>
             <div class="col-md-8">
-                <label class="form-label" for="Booking_ID">Booking ID</label>
+                <label class="form-label" for="Booking_ID">Booking ID <span class="required-indicator" aria-hidden="true">*</span></label>
                 <select class="form-select" id="Booking_ID" name="Booking_ID" required>
                     <option value="">Select a booking</option>
                     {% for booking in bookings %}<option value="{{ booking.Booking_ID }}"{% if order.get('Booking_ID') == booking.Booking_ID %} selected{% endif %}>{{ booking.Booking_ID }} · {{ booking.Customer_Name or 'Unnamed customer' }} · {{ booking.Movie_Name or 'Unassigned movie' }} · {{ booking.Booking_Status or 'No status' }}</option>{% endfor %}
                 </select>
             </div>
             <div class="col-12">
-                <label class="form-label" for="Item_Name">Item Name</label>
-                <input class="form-control" id="Item_Name" name="Item_Name" value="{{ order.get('Item_Name') or '' }}" maxlength="100" required>
+                <label class="form-label" for="Item_Name">Item Name <span class="required-indicator" aria-hidden="true">*</span></label>
+                <input class="form-control" placeholder="Enter the item name" id="Item_Name" name="Item_Name" value="{{ order.get('Item_Name') or '' }}" maxlength="100" required>
             </div>
             <div class="col-md-6">
-                <label class="form-label" for="Quantity">Quantity</label>
-                <input class="form-control" type="number" id="Quantity" name="Quantity" value="{{ order.get('Quantity') if order.get('Quantity') is not none else '' }}" min="1" max="2147483647" step="1" required>
+                <label class="form-label" for="Quantity">Quantity <span class="required-indicator" aria-hidden="true">*</span></label>
+                <input class="form-control" type="number" inputmode="numeric" id="Quantity" name="Quantity" value="{{ order.get('Quantity') if order.get('Quantity') is not none else '' }}" min="1" max="2147483647" step="1" required>
             </div>
             <div class="col-md-6">
-                <label class="form-label" for="Total_Price">Total Price</label>
-                <input class="form-control" type="number" id="Total_Price" name="Total_Price" value="{{ order.get('Total_Price') if order.get('Total_Price') is not none else '' }}" min="0.01" max="999999.99" step="0.01" required aria-describedby="price-help">
+                <label class="form-label" for="Total_Price">Total Price <span class="required-indicator" aria-hidden="true">*</span></label>
+                <input class="form-control" type="number" inputmode="decimal" id="Total_Price" name="Total_Price" value="{{ order.get('Total_Price') if order.get('Total_Price') is not none else '' }}" min="0.01" max="999999.99" step="0.01" required aria-describedby="price-help">
                 <div class="form-text" id="price-help">Enter the total for the full quantity, not the price per item.</div>
             </div>
         </div>
-        <div class="d-flex gap-2 mt-4">
+        <div class="d-flex flex-wrap gap-2 mt-4">
             <button class="btn btn-primary movie-primary" type="submit"{% if not bookings %} disabled{% endif %}>{{ 'Save Changes' if editing else 'Add Food Order' }}</button>
             <a class="btn btn-outline-secondary" href="{{ url_for('food_orders') }}">Cancel</a>
         </div>

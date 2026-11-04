@@ -1,0 +1,5 @@
+{% for category, message in get_flashed_messages(with_categories=true) %}
+<div class="alert alert-{{ category }} feedback-message" role="status" aria-atomic="true">
+    <strong>{{ 'Completed.' if category == 'success' else 'Notice.' }}</strong> {{ message }}
+</div>
+{% endfor %}

@@ -6,6 +6,7 @@
     <title>{% block title %}Dashboard{% endblock %} · Multiplex Management System</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='vendor/bootstrap.min.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="{{ url_for('static', filename='interface.js') }}" defer></script>
 </head>
 <body>
     <a class="visually-hidden-focusable skip-link" href="#main-content">Skip to content</a>
@@ -27,7 +28,7 @@
             </nav>
             <div class="sidebar-note">Your cinema, at a glance.</div>
         </aside>
-        <main id="main-content" class="main-content">
+        <main id="main-content" class="main-content" tabindex="-1">
             {% block content %}{% endblock %}
             <footer>Multiplex Management System <span>DBMS project</span></footer>
         </main>

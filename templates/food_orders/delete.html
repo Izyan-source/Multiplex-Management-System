@@ -2,14 +2,15 @@
 {% block title %}Delete Food Order{% endblock %}
 {% block content %}
 <header class="page-header"><div><p class="eyebrow">FOOD ORDERS</p><h1>Delete Food Order</h1>
-    <p class="text-secondary mb-0">Review the food order before confirming deletion.</p></div></header>
-{% if error %}<div class="alert alert-danger" role="alert">{{ error }}</div>{% endif %}
+    <p class="text-secondary mb-0">Review the food order before confirming deletion.</p></div><a class="btn btn-outline-secondary" href="{{ url_for('food_orders') }}">Back to Food Orders</a></header>
+{% include 'shared/page_error.html' %}
 <section class="card overview-panel movie-form"><div class="card-body">
     <h2 class="h5 text-break">{{ order.Item_Name or 'Unnamed item' }}</h2>
     <p class="text-secondary">Order ID: {{ order.Order_ID }} · Booking ID: {{ order.Booking_ID or '—' }}</p>
     <p>Quantity: {{ order.Quantity if order.Quantity is not none else '—' }} · Total price: {{ '%.2f'|format(order.Total_Price) if order.Total_Price is not none else '—' }}</p>
     <p>This permanently removes this food order. The associated booking will remain unchanged.</p>
-    <form method="post" action="{{ url_for('food_order_delete', order_id=order.Order_ID) }}" class="d-flex gap-2">
+    <p class="fw-semibold">Deletion cannot be undone.</p>
+    <form method="post" action="{{ url_for('food_order_delete', order_id=order.Order_ID) }}" class="d-flex flex-wrap gap-2">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button class="btn btn-danger" type="submit">Delete Food Order</button>
         <a class="btn btn-outline-secondary" href="{{ url_for('food_order_detail', order_id=order.Order_ID) }}">Cancel</a>
